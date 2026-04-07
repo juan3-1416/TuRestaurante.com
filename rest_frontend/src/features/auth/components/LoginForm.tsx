@@ -6,6 +6,7 @@ import * as z from "zod"
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { api } from "@/lib/api";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +17,8 @@ import { Input } from "@/components/ui/input"
 
 //Definiendo el esquema de validacion de Zod
 const formSchema = z.object({
-    email: z.string().email({
-        message: "Por favor ingrese un correo electronico valido."
+    username: z.string().min(3, {
+        message: "El usuario debe tener al menos 3 caracteres."
     }),
     password: z.string().min(5, {
         message: "La contraseña debe tener al menos 5 caracteres."
@@ -32,7 +33,7 @@ export function LoginForm(){
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
         defaultValues:{
-            email: "",
+            username: "",
             password: ""
         },
     })
@@ -41,17 +42,16 @@ export function LoginForm(){
         try {
             setIsLoading(true);
             console.log("Enviando credenciales al servidor...", values);
-            // AQUÍ IRÁ LA PETICIÓN REAL CUANDO EL BACKEND ESTÉ LISTO:
-            // const response = await apiClient.post('/auth/login', values)
-            // const token = response.data.token
+            
+            // Petición POST oficial a Django (`/api/auth/token/`)
+            const response = await api.post('/auth/token/', values);
+            
+            // Django devuelve un token "access" y "refresh" en su diccionario
+            const token = response.data.access;
 
-            // Simulación temporal para probar el flujo:
-            const tokenSimulado = "token-jwt-falso-12345"
-
-            //guardar el token en el estado global
-            login(tokenSimulado)
-            //redirigir al dashboard
-            router.push("/dashboard")
+            // Guardar el token en el estado global (Zustand) y saltar
+            login(token);
+            router.push("/dashboard");
       
         } catch (error) {
             console.error("Error al iniciar sesión", error)
@@ -95,21 +95,21 @@ export function LoginForm(){
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
                     <FormField
                         control={form.control}
-                        name="email"
+                        name="username"
                         render={({ field }) => (
                             <FormItem className="space-y-1.5">
                                 <FormLabel className="text-sm font-semibold text-restaurante-oscuro">
-                                    Correo Electrónico
+                                    Nombre de Usuario
                                 </FormLabel>
                                 <FormControl>
                                     <div className="relative">
                                         <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-restaurante-acento/60">
                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                             </svg>
                                         </div>
                                         <Input
-                                            placeholder="cajero@restaurante.com"
+                                            placeholder="aireyu"
                                             className="pl-11 h-12 bg-gray-50 border-gray-200 rounded-xl text-base transition-all duration-200 focus:bg-white focus:border-restaurante-acento focus:ring-2 focus:ring-restaurante-acento/20"
                                             {...field}
                                         />

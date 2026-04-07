@@ -36,5 +36,26 @@ services:
     depends_on:
       - db
 
+  frontend:
+    build: 
+      context: ./rest_frontend
+      dockerfile: Dockerfile
+    container_name: rest_frontend
+    command: npm run dev
+    volumes:
+      # Refleja tus cambios locales en el contenedor
+      - ./rest_frontend:/app
+      # Protege la carpeta node_modules de Linux para que no se sobreescriba con Windows
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      # URL pública con la que el frontend se comunicará con tu Django
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
+    depends_on:
+      - backend
+
 volumes:
   postgres_data:
