@@ -5,17 +5,14 @@ import { useForm } from "react-hook-form"
 import * as z from "zod"
 import { useAuthStore } from "@/store/authStore";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+
+import { LoadingButton } from "@/shared/components/LoadingButton"
 import { api } from "@/lib/api";
 
-import { Button } from "@/components/ui/button";
-import {
-  Form, FormControl, FormField, 
-  FormItem, FormLabel, FormMessage,
-} from "@/components/ui/form" 
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form" 
 import { Input } from "@/components/ui/input" 
 
-//Definiendo el esquema de validacion de Zod
+// Definiendo el esquema de validacion de Zod
 const formSchema = z.object({
     username: z.string().min(3, {
         message: "El usuario debe tener al menos 3 caracteres."
@@ -28,7 +25,6 @@ const formSchema = z.object({
 export function LoginForm(){
     const login = useAuthStore((state) => state.login)
     const router = useRouter();
-    const [isLoading, setIsLoading] = useState(false);
     
     const form = useForm<z.infer<typeof formSchema>>({
         resolver: zodResolver(formSchema),
@@ -38,25 +34,22 @@ export function LoginForm(){
         },
     })
 
+    // 1. Extraemos el estado isSubmitting directamente de react-hook-form
+    const { isSubmitting } = form.formState;
+
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
-            setIsLoading(true);
-            console.log("Enviando credenciales al servidor...", values);
-            
+            console.log("Conectando al servidor...", values);
             // Petición POST oficial a Django (`/api/auth/token/`)
             const response = await api.post('/auth/token/', values);
             
-            // Django devuelve un token "access" y "refresh" en su diccionario
             const token = response.data.access;
 
-            // Guardar el token en el estado global (Zustand) y saltar
             login(token);
             router.push("/dashboard");
       
         } catch (error) {
             console.error("Error al iniciar sesión", error)
-        } finally {
-            setIsLoading(false);
         }
     }
 
@@ -109,7 +102,8 @@ export function LoginForm(){
                                             </svg>
                                         </div>
                                         <Input
-                                            placeholder="aireyu"
+                                            placeholder="Nombre de Usuario"
+                                            disabled={isSubmitting} /* 3. Bloqueamos el input */
                                             className="pl-11 h-12 bg-gray-50 border-gray-200 rounded-xl text-base transition-all duration-200 focus:bg-white focus:border-restaurante-acento focus:ring-2 focus:ring-restaurante-acento/20"
                                             {...field}
                                         />
@@ -139,6 +133,7 @@ export function LoginForm(){
                                         <Input
                                             type="password"
                                             placeholder="••••••••"
+                                            disabled={isSubmitting} /* 3. Bloqueamos el input */
                                             className="pl-11 h-12 bg-gray-50 border-gray-200 rounded-xl text-base transition-all duration-200 focus:bg-white focus:border-restaurante-acento focus:ring-2 focus:ring-restaurante-acento/20"
                                             {...field}
                                         />
@@ -153,23 +148,14 @@ export function LoginForm(){
                     />
 
                     {/* Botón de login */}
-                    <Button 
+                    <LoadingButton 
                         type="submit" 
-                        disabled={isLoading}
+                        isLoading={isSubmitting}
+                        loadingText="Ingresando..."
                         className="w-full h-12 bg-linear-to-r from-restaurante-primario to-restaurante-acento hover:from-restaurante-oscuro hover:to-restaurante-primario text-white text-base font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-restaurante-primario/25 hover:shadow-restaurante-oscuro/30 hover:scale-[1.01] active:scale-[0.99]"
                     >
-                        {isLoading ? (
-                            <div className="flex items-center gap-2">
-                                <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                </svg>
-                                Ingresando...
-                            </div>
-                        ) : (
-                            "Iniciar Sesión"
-                        )}
-                    </Button>
+                        Iniciar Sesión
+                    </LoadingButton>
                 </form>
             </Form>
 
