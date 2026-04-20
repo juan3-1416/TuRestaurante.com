@@ -1,81 +1,47 @@
 "use client"
 
-import { useState } from "react"
-import { 
-  Plus, Edit2, Trash2, ChevronDown, ChevronRight, 
-  Utensils, Coffee, Drumstick
+import { useState, useEffect } from "react"
+import {
+  Plus, Edit2, Trash2, ChevronDown, ChevronRight,
+  Utensils, Coffee, Drumstick, LayoutGrid
 } from "lucide-react"
 import { LoadingButton } from "@/shared/components/LoadingButton"
 import { VariantModal } from "./VariantModal"
 
-// Datos estructurados con variantes (Simple, Doble, Tamaños, etc.)
-const INITIAL_MENU = [
-  {
-    id: "cat-1",
-    category: "Platos Principales",
-    icon: Utensils,
-    subcategories: [
-      {
-        id: "sub-1",
-        name: "Hamburguesas",
-        items: [
-          { id: 101, name: "Hamburguesa Simple", price: 25.00, status: "Disponible" },
-          { id: 102, name: "Hamburguesa Doble", price: 40.00, status: "Disponible" },
-          { id: 103, name: "Hamburguesa Triple", price: 55.00, status: "Agotado" },
-        ]
-      },
-      {
-        id: "sub-2",
-        name: "Lomitos",
-        items: [
-          { id: 104, name: "Lomito-Simple", price: 30.00, status: "Disponible" },
-          { id: 105, name: "Lomito-Doble", price: 50.00, status: "Disponible"},
-          { id: 106, name: "Lomito-Completo", price: 40.00, status: "Disponible" },
-        ]
-      }
-    ]
-  },
-  {
-    id: "cat-2",
-    category: "Pollos",
-    icon: Drumstick,
-    subcategories: [
-      {
-        id: "sub-3",
-        name: "Pollos",
-        items: [
-          { id: 201, name: "Pollo-Economico", price: 17.00, status: "Disponible" },
-          { id: 202, name: "Pollo-Cuarto", price: 27.00, status: "Disponible" },
-          { id: 203, name: "Pollo-Medio", price: 40.00, status: "Disponible" },
-          { id: 204, name: "Pollo-Entero", price: 70.00, status: "Disponible" },
-        ]
-      }
-    ]
-  },
-  {
-    id: "cat-3",
-    category: "Bebidas",
-    icon: Coffee,
-    subcategories: [
-      {
-        id: "sub-3",
-        name: "Gaseosas",
-        items: [
-          { id: 201, name: "Coca-Cola 500ml", price: 10.00, status: "Disponible" },
-          { id: 202, name: "Coca-Cola 1L", price: 15.00, status: "Disponible" },
-          { id: 203, name: "Coca-Cola 2L", price: 20.00, status: "Disponible" },
-        ]
-      }
-    ]
-  }
-]
+import { apiClient } from "@/lib/axios"
+
+const IconMap: Record<string, any> = {
+  "Utensils": Utensils,
+  "Coffee": Coffee,
+  "Drumstick": Drumstick,
+  "LayoutGrid": LayoutGrid
+}
 
 export function MenuManager() {
-  const [openSections, setOpenSections] = useState<string[]>(["cat-1"])
+  const [categories, setCategories] = useState<any[]>([])
+  const [openSections, setOpenSections] = useState<string[]>([])
   const [isActionLoading, setIsActionLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchMenu = async () => {
+      try {
+        const response = await apiClient.get('/inventory/categories/')
+        setCategories(response.data)
+        if (response.data.length > 0) {
+          setOpenSections([response.data[0].id.toString()])
+        }
+      } catch (error) {
+        console.error("Error fetching menu data", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchMenu()
+  }, [])
 
   const toggleSection = (id: string) => {
-    setOpenSections(prev => 
+    setOpenSections(prev =>
       prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
     )
   }
@@ -87,7 +53,7 @@ export function MenuManager() {
           <h2 className="text-2xl font-bold text-restaurante-oscuro">Administración de Carta</h2>
           <p className="text-gray-600 text-sm">Gestiona categorías, variantes y precios</p>
         </div>
-        <LoadingButton 
+        <LoadingButton
           isLoading={isActionLoading}
           onClick={() => setIsActionLoading(true)}
           className="bg-restaurante-primario hover:bg-restaurante-acento text-white rounded-2xl px-6"
@@ -97,34 +63,34 @@ export function MenuManager() {
       </div>
 
       <div className="grid gap-4">
-        {INITIAL_MENU.map((cat) => {
-          const isOpen = openSections.includes(cat.id);
-          const Icon = cat.icon;
+        {isLoading ? (
+          <div className="text-center p-8 text-white">Cargando menú...</div>
+        ) : categories.map((cat) => {
+          const isOpen = openSections.includes(cat.id.toString());
+          const Icon = IconMap[cat.icon] || Utensils;
 
           return (
             <div key={cat.id} className="group overflow-hidden">
               {/* Encabezado de Categoría (Acordeón) */}
-              <button 
+              <button
                 onClick={() => toggleSection(cat.id)}
-                className={`w-full flex items-center justify-between p-5 rounded-3xl transition-all duration-300 border ${
-                  isOpen 
-                  ? "bg-restaurante-primario text-white border-transparent shadow-lg" 
-                  : "bg-white/40 backdrop-blur-md text-restaurante-oscuro border-white/60 hover:bg-white/60"
-                }`}
+                className={`w-full flex items-center justify-between p-5 rounded-3xl transition-all duration-300 border ${isOpen
+                    ? "bg-restaurante-primario text-white border-transparent shadow-lg"
+                    : "bg-white/40 backdrop-blur-md text-restaurante-oscuro border-white/60 hover:bg-white/60"
+                  }`}
               >
                 <div className="flex items-center gap-4">
                   <div className={`p-2 rounded-xl ${isOpen ? "bg-white/20" : "bg-restaurante-claro/20"}`}>
                     <Icon size={20} />
                   </div>
-                  <span className="font-bold text-lg">{cat.category}</span>
+                  <span className="font-bold text-lg">{cat.name}</span>
                 </div>
                 {isOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
               </button>
 
               {/* Contenido Plegable */}
-              <div className={`grid transition-all duration-500 ease-in-out ${
-                isOpen ? "grid-rows-[1fr] opacity-100 mt-4" : "grid-rows-[0fr] opacity-0"
-              }`}>
+              <div className={`grid transition-all duration-500 ease-in-out ${isOpen ? "grid-rows-[1fr] opacity-100 mt-4" : "grid-rows-[0fr] opacity-0"
+                }`}>
                 <div className="overflow-hidden space-y-6 pl-6 border-l-2 border-restaurante-claro/30 ml-8">
                   {cat.subcategories.map((sub) => (
                     <div key={sub.id} className="space-y-3">
@@ -137,18 +103,17 @@ export function MenuManager() {
 
                       <div className="grid gap-3">
                         {sub.items.map((item) => (
-                          <div 
-                            key={item.id} 
+                          <div
+                            key={item.id}
                             className="flex items-center justify-between p-4 bg-white/30 backdrop-blur-sm rounded-2xl border border-white/50 hover:border-restaurante-claro/50 transition-all group/item"
                           >
                             <span className="font-semibold text-restaurante-oscuro">{item.name}</span>
                             <div className="flex items-center gap-6">
-                              <span className="font-mono font-bold text-restaurante-primario">Bs. {item.price.toFixed(2)}</span>
-                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${
-                                item.status === "Disponible" 
-                                ? "bg-green-100 text-green-700 border-green-200" 
-                                : "bg-red-100 text-red-700 border-red-200"
-                              }`}>
+                              <span className="font-mono font-bold text-restaurante-primario">Bs. {parseFloat(item.price).toFixed(2)}</span>
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${item.status === "Disponible"
+                                  ? "bg-green-100 text-green-700 border-green-200"
+                                  : "bg-red-100 text-red-700 border-red-200"
+                                }`}>
                                 {item.status}
                               </span>
                               <div className="flex gap-1">
