@@ -2,15 +2,35 @@
 
 import { useState, useEffect } from "react"
 import {
-  Plus, Edit2, Trash2, ChevronDown, ChevronRight,
-  Utensils, Coffee, Drumstick, LayoutGrid
+  Edit2, Trash2, ChevronDown, ChevronRight,
+  Utensils, Coffee, Drumstick, LayoutGrid, LucideIcon
 } from "lucide-react"
-import { LoadingButton } from "@/shared/components/LoadingButton"
 import { VariantModal } from "./VariantModal"
+import { CategoryModal } from "./CategoryModal"
+import { SubcategoryModal } from "./SubcategoryModal"
 
 import { apiClient } from "@/lib/axios"
 
-const IconMap: Record<string, any> = {
+// --- Tipos para los datos de la API ---
+interface MenuItem {
+  id: number
+  name: string
+  price: string
+  status: string
+}
+interface Subcategory {
+  id: number
+  name: string
+  items: MenuItem[]
+}
+interface Category {
+  id: string
+  name: string
+  icon: string
+  subcategories: Subcategory[]
+}
+
+const IconMap: Record<string, LucideIcon> = {
   "Utensils": Utensils,
   "Coffee": Coffee,
   "Drumstick": Drumstick,
@@ -18,32 +38,51 @@ const IconMap: Record<string, any> = {
 }
 
 export function MenuManager() {
-  const [categories, setCategories] = useState<any[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [openSections, setOpenSections] = useState<string[]>([])
-  const [isActionLoading, setIsActionLoading] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
-  useEffect(() => {
-    const fetchMenu = async () => {
-      try {
-        const response = await apiClient.get('/inventory/categories/')
-        setCategories(response.data)
-        if (response.data.length > 0) {
-          setOpenSections([response.data[0].id.toString()])
-        }
-      } catch (error) {
-        console.error("Error fetching menu data", error)
-      } finally {
-        setIsLoading(false)
+  const fetchMenu = async () => {
+    try {
+      const response = await apiClient.get('/inventory/categories/')
+      // Algunos backends como Django REST devuelven los datos dentro de "results" cuando hay paginación.
+      const data = response.data.results !== undefined ? response.data.results : response.data
+      
+      // Aseguramos que sea un array para evitar errores en el .map
+      const safeData = Array.isArray(data) ? data : []
+      
+      setCategories(safeData)
+      if (safeData.length > 0 && openSections.length === 0) {
+        setOpenSections([safeData[0].id.toString()])
       }
+    } catch (error) {
+      console.error("Error fetching menu data", error)
+    } finally {
+      setIsLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchMenu()
   }, [])
 
-  const toggleSection = (id: string) => {
+  const toggleSection = (id: string | number) => {
+    const strId = id.toString();
     setOpenSections(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
+      prev.includes(strId) ? prev.filter(s => s !== strId) : [...prev, strId]
     )
+  }
+
+  const handleDeleteProduct = async (productId: number) => {
+    if (window.confirm("¿Estás seguro de que deseas eliminar este platillo? Esta acción no se puede deshacer.")) {
+      try {
+        await apiClient.delete(`/inventory/products/${productId}/`)
+        fetchMenu() // Recargamos para ver los cambios
+      } catch (error) {
+        console.error("Error al eliminar producto", error)
+        alert("Hubo un problema al intentar eliminar el platillo.")
+      }
+    }
   }
 
   return (
@@ -53,13 +92,7 @@ export function MenuManager() {
           <h2 className="text-2xl font-bold text-restaurante-oscuro">Administración de Carta</h2>
           <p className="text-gray-600 text-sm">Gestiona categorías, variantes y precios</p>
         </div>
-        <LoadingButton
-          isLoading={isActionLoading}
-          onClick={() => setIsActionLoading(true)}
-          className="bg-restaurante-primario hover:bg-restaurante-acento text-white rounded-2xl px-6"
-        >
-          <Plus className="mr-2 h-4 w-4" /> Nueva Categoría
-        </LoadingButton>
+        <CategoryModal onCategoryCreated={fetchMenu} />
       </div>
 
       <div className="grid gap-4">
@@ -92,13 +125,22 @@ export function MenuManager() {
               <div className={`grid transition-all duration-500 ease-in-out ${isOpen ? "grid-rows-[1fr] opacity-100 mt-4" : "grid-rows-[0fr] opacity-0"
                 }`}>
                 <div className="overflow-hidden space-y-6 pl-6 border-l-2 border-restaurante-claro/30 ml-8">
-                  {cat.subcategories.map((sub) => (
+                  {cat.subcategories?.length === 0 && (
+                    <div className="text-sm text-gray-500 italic p-4 text-center bg-white/20 rounded-xl">
+                      Aún no hay platillos en esta categoría. Agrega una subcategoría para empezar.
+                    </div>
+                  )}
+                  {cat.subcategories?.map((sub) => (
                     <div key={sub.id} className="space-y-3">
                       <div className="flex items-center justify-between">
                         <h4 className="text-restaurante-acento font-bold uppercase tracking-widest text-xs flex items-center gap-2">
                           <ChevronRight size={14} /> {sub.name}
                         </h4>
-                        <VariantModal subcategoryName={sub.name} />
+                        <VariantModal 
+                          subcategoryId={sub.id} 
+                          subcategoryName={sub.name} 
+                          onSuccess={fetchMenu} 
+                        />
                       </div>
 
                       <div className="grid gap-3">
@@ -116,20 +158,39 @@ export function MenuManager() {
                                 }`}>
                                 {item.status}
                               </span>
-                              <div className="flex gap-1">
-                                <button className="p-1.5 hover:bg-white rounded-lg text-gray-400 hover:text-restaurante-acento transition-colors">
-                                  <Edit2 size={14} />
-                                </button>
-                                <button className="p-1.5 hover:bg-white rounded-lg text-gray-400 hover:text-red-500 transition-colors">
-                                  <Trash2 size={14} />
-                                </button>
-                              </div>
+                                <div className="flex gap-1">
+                                  <VariantModal
+                                    subcategoryId={sub.id}
+                                    onSuccess={fetchMenu}
+                                    itemToEdit={item}
+                                    trigger={
+                                      <button className="p-1.5 hover:bg-white rounded-lg text-gray-400 hover:text-restaurante-acento transition-colors">
+                                        <Edit2 size={14} />
+                                      </button>
+                                    }
+                                  />
+                                  <button 
+                                    onClick={() => handleDeleteProduct(item.id)}
+                                    className="p-1.5 hover:bg-white rounded-lg text-gray-400 hover:text-red-500 transition-colors"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
                             </div>
                           </div>
                         ))}
                       </div>
                     </div>
                   ))}
+
+                  {/* Botón para agregar nueva subcategoría */}
+                  <div className="pt-2">
+                    <SubcategoryModal 
+                      categoryId={cat.id.toString()} 
+                      categoryName={cat.name} 
+                      onSubcategoryCreated={fetchMenu} 
+                    />
+                  </div>
                 </div>
               </div>
             </div>
