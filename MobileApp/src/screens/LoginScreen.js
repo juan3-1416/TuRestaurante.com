@@ -13,6 +13,14 @@ import {
 } from 'react-native';
 import { colors } from '../theme/colors';
 import { login, setToken } from '../services/api';
+import { useEffect } from "react";
+import { getProductos } from "../services/api";
+
+useEffect(() => {
+  getProductos(1)
+    .then(data => console.log("OK:", data))
+    .catch(err => console.log("ERROR:", err));
+}, []);
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
