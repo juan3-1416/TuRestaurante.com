@@ -1,5 +1,4 @@
-// src/screens/LoginScreen.js
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,139 +6,174 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { colors } from '../theme/colors';
-import { login, setToken } from '../services/api';
-import { useEffect } from "react";
-import { getProductos } from "../services/api";
-
-useEffect(() => {
-  getProductos(1)
-    .then(data => console.log("OK:", data))
-    .catch(err => console.log("ERROR:", err));
-}, []);
+} from "react-native";
+import LinearGradient from "react-native-linear-gradient";
+import { colors } from "../theme/colors";
+import { login, setToken } from "../services/api";
 
 export default function LoginScreen({ navigation }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert('Campos requeridos', 'Por favor ingresa tu email y contraseña.');
-      return;
-    }
-
     setLoading(true);
     try {
-      const data = await login(email.trim(), password);
+      const data = await login(username, password);
       setToken(data.token);
-
-      // Navegar a mesas pasando el usuario
-      navigation.replace('Mesas', { usuario: data.usuario });
-    } catch (error) {
-      Alert.alert('Error al ingresar', error.message || 'Intenta de nuevo.');
+      navigation.replace("Mesas");
+    } catch (e) {
+      alert("Error al iniciar sesión");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
+    <LinearGradient
+      colors={["#4C1D95", "#0EA5E9"]}
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.card}>
+
+        {/* ICONO */}
+        <View style={styles.iconBox}>
+          <Text style={styles.icon}>🍽️</Text>
+        </View>
+
+        {/* TITULO */}
         <Text style={styles.title}>Bienvenido</Text>
-        <Text style={styles.subtitle}>Sistema de pedidos</Text>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Correo electrónico"
-          placeholderTextColor={colors.lightGray}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-        />
+        {/* INPUT USER */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.iconInput}>👤</Text>
+          <TextInput
+            placeholder="Nombre de usuario"
+            value={username}
+            onChangeText={setUsername}
+            style={styles.input}
+          />
+        </View>
 
-        <TextInput
-          style={styles.input}
-          placeholder="Contraseña"
-          placeholderTextColor={colors.lightGray}
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
+        {/* INPUT PASS */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.iconInput}>🔒</Text>
+          <TextInput
+            placeholder="Contraseña"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+            style={styles.input}
+          />
+        </View>
 
-        <TouchableOpacity
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleLogin}
-          disabled={loading}
-          activeOpacity={0.85}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.white} />
-          ) : (
-            <Text style={styles.buttonText}>Ingresar</Text>
-          )}
+        {/* OLVIDASTE */}
+        <Text style={styles.forgot}>¿Olvidaste tu contraseña?</Text>
+
+        {/* BOTON */}
+        <TouchableOpacity onPress={handleLogin} activeOpacity={0.8}>
+          <LinearGradient
+            colors={["#2563EB", "#14B8A6"]}
+            style={styles.button}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Iniciar Sesión</Text>
+            )}
+          </LinearGradient>
         </TouchableOpacity>
+
+        {/* FOOTER */}
+        <Text style={styles.footer}>
+          © 2026 Todos los derechos reservados.
+        </Text>
+
       </View>
-    </KeyboardAvoidingView>
+    </LinearGradient>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+    justifyContent: "center",
+    alignItems: "center",
   },
+
   card: {
+    width: "85%",
     backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 28,
-    width: '100%',
-    maxWidth: 380,
+    borderRadius: 20,
+    padding: 25,
+    alignItems: "center",
+    elevation: 10,
   },
+
+  iconBox: {
+    width: 70,
+    height: 70,
+    borderRadius: 15,
+    backgroundColor: "#0EA5E9",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+
+  icon: {
+    fontSize: 30,
+    color: "#fff",
+  },
+
   title: {
     fontSize: 26,
-    fontWeight: 'bold',
-    color: colors.dark,
-    marginBottom: 4,
+    fontWeight: "bold",
+    color: "#5B21B6",
+    marginBottom: 20,
   },
-  subtitle: {
-    fontSize: 14,
-    color: colors.secondary,
-    marginBottom: 28,
-  },
-  input: {
+
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.lightGray,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: colors.text,
-    marginBottom: 14,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    marginBottom: 15,
+    width: "100%",
   },
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: colors.white,
+
+  iconInput: {
+    marginRight: 8,
     fontSize: 16,
-    fontWeight: '600',
+  },
+
+  input: {
+    flex: 1,
+    padding: 12,
+  },
+
+  forgot: {
+    fontSize: 12,
+    color: colors.gray,
+    alignSelf: "flex-start",
+    marginBottom: 15,
+  },
+
+  button: {
+    width: "100%",
+    padding: 15,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+
+  buttonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  footer: {
+    marginTop: 20,
+    fontSize: 12,
+    color: colors.gray,
   },
 });

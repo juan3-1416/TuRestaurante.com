@@ -1,187 +1,246 @@
-// src/screens/MesasScreen.js
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
   FlatList,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
-  Alert,
-  RefreshControl,
-} from 'react-native';
-import { colors } from '../theme/colors';
-import { getMesas } from '../services/api';
+} from "react-native";
+import Icon from "react-native-vector-icons/Feather";
+import { colors } from "../theme/colors";
 
-export default function MesasScreen({ route, navigation }) {
-  const { usuario } = route.params;
-  const [mesas, setMesas] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+const TABLES = [
+  { id: "1", number: 1, capacity: 4, status: "Libre" },
+  { id: "2", number: 2, capacity: 4, status: "Ocupada", total: 150.5, cliente: "Familia Perez" },
+  { id: "3", number: 3, capacity: 2, status: "Reservada", hora: "19:30", cliente: "Juan Gomez" },
+  { id: "4", number: 4, capacity: 6, status: "Libre" },
+];
 
-  const cargarMesas = useCallback(async () => {
-    try {
-      const data = await getMesas(usuario.restaurante_id);
-      setMesas(data);
-    } catch (error) {
-      Alert.alert('Error', 'No se pudieron cargar las mesas.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+export default function MesasScreen({ navigation }) {
+  const [filter, setFilter] = useState("Todas");
+
+  const filtered =
+    filter === "Todas"
+      ? TABLES
+      : TABLES.filter((t) => t.status === filter);
+
+  const getStyles = (status) => {
+    switch (status) {
+      case "Libre":
+        return { color: "#22C55E", icon: "check-circle" };
+      case "Ocupada":
+        return { color: "#EF4444", icon: "dollar-sign" };
+      case "Reservada":
+        return { color: "#EAB308", icon: "clock" };
     }
-  }, [usuario.restaurante_id]);
-
-  useEffect(() => {
-    cargarMesas();
-  }, [cargarMesas]);
-
-  // Recargar mesas al volver de PedidoScreen
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', cargarMesas);
-    return unsubscribe;
-  }, [navigation, cargarMesas]);
-
-  const handleMesaPress = (mesa) => {
-    navigation.navigate('Pedido', { mesa, usuario });
   };
 
-  const renderMesa = ({ item }) => {
-    const ocupada = item.estado === 'ocupada';
+  const renderItem = ({ item }) => {
+    const s = getStyles(item.status);
+
     return (
       <TouchableOpacity
-        style={[styles.mesa, ocupada ? styles.mesaOcupada : styles.mesaLibre]}
-        onPress={() => handleMesaPress(item)}
-        activeOpacity={0.8}
+        style={[styles.card, { borderColor: s.color }]}
+        onPress={() => navigation.navigate("Pedido", { mesa: item })}
       >
-        <Text style={styles.mesaNumero}>Mesa {item.numero}</Text>
-        <View style={[styles.badge, { backgroundColor: ocupada ? colors.danger : colors.success }]}>
-          <Text style={styles.badgeText}>{ocupada ? 'Ocupada' : 'Libre'}</Text>
+        {/* Indicador */}
+        <View style={[styles.dot, { backgroundColor: s.color }]} />
+
+        {/* Header */}
+        <View style={styles.row}>
+          <View style={[styles.iconBox, { backgroundColor: s.color + "20" }]}>
+            <Icon name={s.icon} size={20} color={s.color} />
+          </View>
+
+          <View>
+            <Text style={styles.title}>Mesa {item.number}</Text>
+            <Text style={styles.sub}>{item.capacity} personas</Text>
+          </View>
+        </View>
+
+        {/* Cliente */}
+        {item.cliente ? (
+          <View style={styles.clientBox}>
+            <Text style={styles.clientLabel}>Cliente</Text>
+            <Text style={styles.client}>{item.cliente}</Text>
+          </View>
+        ) : (
+          <Text style={styles.empty}>Sin Reservar</Text>
+        )}
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          {item.status === "Ocupada" && (
+            <Text style={styles.total}>Bs. {item.total}</Text>
+          )}
+
+          {item.status === "Reservada" && (
+            <Text style={styles.time}>{item.hora}</Text>
+          )}
+
+          {item.status === "Libre" && (
+            <Text style={styles.available}>Disponible</Text>
+          )}
+
+          <Icon name="play" size={16} color={colors.primary} />
         </View>
       </TouchableOpacity>
     );
   };
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Cargando mesas...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Mesas</Text>
-        <Text style={styles.headerSub}>Hola, {usuario.nombre}</Text>
+      {/* HEADER */}
+      <Text style={styles.header}>Mapa de Mesas</Text>
+
+      {/* FILTROS */}
+      <View style={styles.filters}>
+        {["Todas", "Libre", "Ocupada", "Reservada"].map((f) => (
+          <TouchableOpacity
+            key={f}
+            onPress={() => setFilter(f)}
+            style={[
+              styles.filter,
+              filter === f && styles.activeFilter,
+            ]}
+          >
+            <Text
+              style={[
+                styles.filterText,
+                filter === f && { color: "#fff" },
+              ]}
+            >
+              {f}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
+      {/* GRID */}
       <FlatList
-        data={mesas}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderMesa}
+        data={filtered}
+        renderItem={renderItem}
+        keyExtractor={(i) => i.id}
         numColumns={2}
-        columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.list}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              cargarMesas();
-            }}
-            colors={[colors.primary]}
-          />
-        }
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>No hay mesas registradas.</Text>
-        }
+        columnWrapperStyle={{ justifyContent: "space-between" }}
       />
     </View>
   );
 }
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.lightGray,
+    backgroundColor: "#F1F5F9",
+    padding: 15,
   },
-  centered: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.lightGray,
-  },
-  loadingText: {
-    marginTop: 12,
-    color: colors.secondary,
-    fontSize: 14,
-  },
+
   header: {
-    backgroundColor: colors.dark,
-    paddingTop: 48,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    fontSize: 26,
+    fontWeight: "bold",
+    color: "#4C1D95",
+    marginBottom: 15,
   },
-  headerTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: colors.white,
+
+  filters: {
+    flexDirection: "row",
+    marginBottom: 15,
   },
-  headerSub: {
-    fontSize: 14,
-    color: colors.secondary,
-    marginTop: 2,
+
+  filter: {
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: "#E5E7EB",
+    marginRight: 8,
   },
-  list: {
-    padding: 16,
+
+  activeFilter: {
+    backgroundColor: "#4C1D95",
   },
-  row: {
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  mesa: {
-    width: '48%',
-    borderRadius: 14,
-    padding: 20,
-    alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  mesaLibre: {
-    backgroundColor: colors.white,
-    borderWidth: 2,
-    borderColor: colors.success,
-  },
-  mesaOcupada: {
-    backgroundColor: colors.white,
-    borderWidth: 2,
-    borderColor: colors.danger,
-  },
-  mesaNumero: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: colors.dark,
-    marginBottom: 10,
-  },
-  badge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  badgeText: {
-    color: colors.white,
+
+  filterText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "bold",
   },
-  emptyText: {
-    textAlign: 'center',
-    color: colors.secondary,
-    marginTop: 40,
-    fontSize: 15,
+
+  card: {
+    width: "48%",
+    padding: 15,
+    borderRadius: 25,
+    backgroundColor: "#ffffffcc",
+    borderWidth: 2,
+    marginBottom: 15,
+  },
+
+  dot: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  iconBox: {
+    padding: 10,
+    borderRadius: 15,
+  },
+
+  title: {
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+
+  sub: {
+    fontSize: 11,
+    color: "#6B7280",
+  },
+
+  clientBox: {
+    backgroundColor: "#F3F4F6",
+    padding: 10,
+    borderRadius: 15,
+    marginTop: 10,
+  },
+
+  clientLabel: {
+    fontSize: 10,
+    color: "#9CA3AF",
+  },
+
+  client: {
+    fontWeight: "bold",
+  },
+
+  empty: {
+    marginTop: 10,
+    fontStyle: "italic",
+    color: "#9CA3AF",
+  },
+
+  footer: {
+    marginTop: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  total: {
+    fontWeight: "bold",
+    color: "#2563EB",
+  },
+
+  time: {
+    color: "#CA8A04",
+  },
+
+  available: {
+    color: "#22C55E",
+    fontWeight: "bold",
   },
 });
