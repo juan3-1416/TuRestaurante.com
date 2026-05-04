@@ -19,11 +19,45 @@ export function TableDetailModal({ table, isOpen, onClose, onUpdateTable }: Tabl
   const [viewMode, setViewMode] = useState<"detail" | "products">("detail")
   const [selectedProducts, setSelectedProducts] = useState<Product[]>([])
 
+  // Estados previos para la sincronización (Render Phase Update)
+  const [prevIsOpen, setPrevIsOpen] = useState(false)
+  const [prevTableId, setPrevTableId] = useState<string | null>(null)
+
+  // La manera correcta y moderna en React de sincronizar estado sin usar useEffect.
+  // Ajustamos el estado directamente durante el renderizado si detectamos que se abrió el modal o cambió la mesa.
+  if (isOpen && (!prevIsOpen || table?.id !== prevTableId)) {
+    setPrevIsOpen(true)
+    setPrevTableId(table?.id || null)
+    setSelectedProducts(table?.orders || [])
+    setViewMode("detail")
+  } else if (!isOpen && prevIsOpen) {
+    setPrevIsOpen(false)
+  }
+
   if (!table) return null
 
   const handleClose = () => {
     setViewMode("detail")
-    setSelectedProducts([])
+    onClose()
+  }
+
+  // Nueva función exclusiva para procesar la reserva con los datos del formulario
+  const handleConfirmReservation = async (name: string, time: string) => {
+    setIsLoading(true)
+    setActionLoading("Confirmar Reserva")
+    
+    await new Promise(resolve => setTimeout(resolve, 800))
+    
+    onUpdateTable({
+      ...table,
+      status: "Reservada",
+      customerName: name,
+      activeTime: time,
+      orders: []
+    })
+    
+    setIsLoading(false)
+    setActionLoading(null)
     onClose()
   }
 
@@ -31,7 +65,6 @@ export function TableDetailModal({ table, isOpen, onClose, onUpdateTable }: Tabl
     setIsLoading(true)
     setActionLoading(actionName)
     
-    // Simulamos un delay de red
     await new Promise(resolve => setTimeout(resolve, 800))
     
     if (table) {
@@ -41,28 +74,20 @@ export function TableDetailModal({ table, isOpen, onClose, onUpdateTable }: Tabl
           status: "Ocupada",
           customerName: "Cliente Casual",
           activeTime: "0 min",
-          currentTotal: 0
+          currentTotal: 0,
+          orders: []
         })
         onClose()
-      } else if (actionName === "Reservando") {
-        onUpdateTable({
-          ...table,
-          status: "Reservada",
-          customerName: "Nueva Reserva",
-          activeTime: "12:00 PM"
-        })
-        onClose()
-      } else if (actionName === "Añadiendo pedido") {
+      } else if (actionName === "Añadiendo pedido" || actionName === "Tomando orden") {
         setViewMode("products")
-        setSelectedProducts([])
-        // No cerramos el modal al añadir un pedido
       } else if (actionName === "Cobrando") {
         onUpdateTable({
           ...table,
           status: "Libre",
           customerName: undefined,
           activeTime: undefined,
-          currentTotal: undefined
+          currentTotal: undefined,
+          orders: []
         })
         onClose()
       } else if (actionName === "Asignando") {
@@ -70,24 +95,22 @@ export function TableDetailModal({ table, isOpen, onClose, onUpdateTable }: Tabl
           ...table,
           status: "Ocupada",
           activeTime: "0 min",
-          currentTotal: 0
+          currentTotal: 0,
+          orders: []
         })
         onClose()
-      } else if (actionName === "Tomando orden") {
-        setViewMode("products")
-        setSelectedProducts([])
       } else if (actionName === "Confirmar Pedido") {
-        const totalAdicional = selectedProducts.reduce((acc: number, p: Product) => acc + p.price, 0)
+        const totalCompleto = selectedProducts.reduce((acc: number, p: Product) => acc + p.price, 0)
+        
         onUpdateTable({
           ...table,
           status: "Ocupada",
           customerName: table.customerName || (table.status === "Reservada" ? table.customerName : "Cliente Casual"),
           activeTime: table.activeTime || "0 min",
-          currentTotal: (table.currentTotal || 0) + totalAdicional
+          currentTotal: totalCompleto,
+          orders: selectedProducts
         })
         setViewMode("detail")
-        setSelectedProducts([])
-        onClose()
       }
     }
 
@@ -99,7 +122,6 @@ export function TableDetailModal({ table, isOpen, onClose, onUpdateTable }: Tabl
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="bg-white/90 backdrop-blur-3xl border-white/50 shadow-2xl rounded-[2.5rem] sm:max-w-[400px] max-h-[90vh] p-0 overflow-hidden flex flex-col">
         
-        {/* Header Decorativo */}
         <div className={`h-32 w-full absolute top-0 left-0 -z-10 opacity-30 ${
           table.status === 'Libre' ? 'bg-linear-to-b from-green-300 to-transparent' :
           table.status === 'Ocupada' ? 'bg-linear-to-b from-red-300 to-transparent' :
@@ -112,6 +134,9 @@ export function TableDetailModal({ table, isOpen, onClose, onUpdateTable }: Tabl
             isLoading={isLoading}
             actionLoading={actionLoading}
             handleAction={handleAction}
+            selectedProducts={selectedProducts}
+            setSelectedProducts={setSelectedProducts}
+            onConfirmReservation={handleConfirmReservation}
           />
         ) : (
           <TableProductMenu 

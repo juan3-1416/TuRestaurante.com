@@ -4,6 +4,8 @@ import { useState } from "react"
 import { TableDetailModal } from "./TableDetailModal"
 import { Receipt, Play, Filter, CheckCircle2, CalendarClock } from "lucide-react"
 
+import { Product } from "./TableProductMenu"
+
 // Tipos y Datos Simulados
 export type TableStatus = "Libre" | "Ocupada" | "Reservada" | "Todas"
 
@@ -15,6 +17,7 @@ export interface Table {
   currentTotal?: number
   activeTime?: string
   customerName?: string // Para reservadas u ocupadas
+  orders?: Product[]
 }
 
 const MOCK_TABLES: Table[] = [
