@@ -16,19 +16,24 @@ export default function LoginScreen({ navigation }) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
-    setLoading(true);
-    try {
-      const data = await login(username, password);
-      setToken(data.token);
-      navigation.replace("Mesas");
-    } catch (e) {
-      alert("Error al iniciar sesión");
-    } finally {
-      setLoading(false);
-    }
-  };
+const handleLogin = async () => {
+  console.log("CLICK LOGIN 🔥");
 
+  setLoading(true);
+
+  try {
+    const data = await login(username, password);
+    console.log("LOGIN OK:", data);
+
+    setToken(data.token);
+    navigation.replace("Mesas");
+  } catch (e) {
+    console.log("ERROR REAL:", e);
+    alert("Error al iniciar sesión");
+  } finally {
+    setLoading(false);
+  }
+};
   return (
     <LinearGradient
       colors={["#4C1D95", "#0EA5E9"]}
