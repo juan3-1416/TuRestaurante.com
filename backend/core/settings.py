@@ -52,7 +52,9 @@ INSTALLED_APPS = [
 
     # Aplicaciones locales (las agregaremos a medida que se estructuren)
     'apps.users',
-    # 'apps.orders',
+    'apps.inventory',
+    'apps.tables',
+    'apps.orders',
 ]
 
 MIDDLEWARE = [
