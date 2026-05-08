@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { TableDetailModal } from "./TableDetailModal"
 import { Receipt, Play, Filter, CheckCircle2, CalendarClock } from "lucide-react"
+import { apiClient } from "@/lib/axios"
 
 import { Product } from "./TableProductMenu"
 
@@ -20,26 +21,38 @@ export interface Table {
   orders?: Product[]
 }
 
-const MOCK_TABLES: Table[] = [
-  { id: "t1", number: 1, capacity: 4, status: "Libre" },
-  { id: "t2", number: 2, capacity: 4, status: "Ocupada", currentTotal: 150.50, activeTime: "45 min", customerName: "Familia Perez" },
-  { id: "t3", number: 3, capacity: 2, status: "Reservada", activeTime: "19:30 hrs", customerName: "Juan Gomez" },
-  { id: "t4", number: 4, capacity: 6, status: "Libre" },
-  { id: "t5", number: 5, capacity: 4, status: "Ocupada", currentTotal: 320.00, activeTime: "1h 10m", customerName: "Empresa X" },
-  { id: "t6", number: 6, capacity: 8, status: "Libre" },
-  { id: "t7", number: 7, capacity: 2, status: "Libre" },
-  { id: "t8", number: 8, capacity: 10, status: "Reservada", activeTime: "20:00 hrs", customerName: "Marta Ruiz" },
-]
-
 export function TableMap() {
   const [activeFilter, setActiveFilter] = useState<TableStatus>("Todas")
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
-  const [tables, setTables] = useState<Table[]>(MOCK_TABLES)
+  const [tables, setTables] = useState<Table[]>([])
+
+  const fetchTables = async () => {
+    try {
+      const res = await apiClient.get('/tables/tables/')
+      // Transform incoming data to make sure numeric values are correct
+      const transformed = res.data.map((t: any) => ({
+        ...t,
+        id: t.id.toString(),
+        number: parseInt(t.number) || 0,
+      }))
+      setTables(transformed)
+    } catch (err) {
+      console.error("Error fetching tables", err)
+    }
+  }
+
+  useEffect(() => {
+    fetchTables()
+    // Optionally we could set an interval to poll
+  }, [])
 
   const handleUpdateTable = (updatedTable: Table) => {
+    // When a table is updated, we fetch everything from server to be sure, 
+    // or we could optimistically update. Let's optimistically update:
     setTables(prev => prev.map(t => t.id === updatedTable.id ? updatedTable : t))
-    // Actualizamos también la mesa seleccionada para que el modal refleje los cambios si sigue abierto
     setSelectedTable(updatedTable)
+    // Refetch in the background to sync
+    fetchTables()
   }
   
   // Filtrado lógico de las mesas

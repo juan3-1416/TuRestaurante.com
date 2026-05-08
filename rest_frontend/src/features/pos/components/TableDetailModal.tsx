@@ -5,6 +5,7 @@ import { useState } from "react"
 import { Table } from "./TableMap"
 import { TableStatusDetail } from "./TableStatusDetail"
 import { TableProductMenu, Product } from "./TableProductMenu"
+import { apiClient } from "@/lib/axios"
 
 interface TableDetailProps {
   table: Table | null
@@ -46,76 +47,72 @@ export function TableDetailModal({ table, isOpen, onClose, onUpdateTable }: Tabl
     setIsLoading(true)
     setActionLoading("Confirmar Reserva")
     
-    await new Promise(resolve => setTimeout(resolve, 800))
-    
-    onUpdateTable({
-      ...table,
-      status: "Reservada",
-      customerName: name,
-      activeTime: time,
-      orders: []
-    })
-    
-    setIsLoading(false)
-    setActionLoading(null)
-    onClose()
+    try {
+      const res = await apiClient.patch(`/tables/tables/${table.id}/update_status/`, {
+        status: "Reservada",
+        customerName: name,
+        activeTime: time
+      })
+      onUpdateTable(res.data.table)
+      onClose()
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setIsLoading(false)
+      setActionLoading(null)
+    }
   }
 
   const handleAction = async (actionName: string) => {
     setIsLoading(true)
     setActionLoading(actionName)
     
-    await new Promise(resolve => setTimeout(resolve, 800))
-    
-    if (table) {
-      if (actionName === "Abriendo") {
-        onUpdateTable({
-          ...table,
-          status: "Ocupada",
-          customerName: "Cliente Casual",
-          activeTime: "0 min",
-          currentTotal: 0,
-          orders: []
-        })
-        onClose()
-      } else if (actionName === "Añadiendo pedido" || actionName === "Tomando orden") {
-        setViewMode("products")
-      } else if (actionName === "Cobrando") {
-        onUpdateTable({
-          ...table,
-          status: "Libre",
-          customerName: undefined,
-          activeTime: undefined,
-          currentTotal: undefined,
-          orders: []
-        })
-        onClose()
-      } else if (actionName === "Asignando") {
-        onUpdateTable({
-          ...table,
-          status: "Ocupada",
-          activeTime: "0 min",
-          currentTotal: 0,
-          orders: []
-        })
-        onClose()
-      } else if (actionName === "Confirmar Pedido") {
-        const totalCompleto = selectedProducts.reduce((acc: number, p: Product) => acc + p.price, 0)
-        
-        onUpdateTable({
-          ...table,
-          status: "Ocupada",
-          customerName: table.customerName || (table.status === "Reservada" ? table.customerName : "Cliente Casual"),
-          activeTime: table.activeTime || "0 min",
-          currentTotal: totalCompleto,
-          orders: selectedProducts
-        })
-        setViewMode("detail")
+    try {
+      if (table) {
+        if (actionName === "Abriendo") {
+          const res = await apiClient.patch(`/tables/tables/${table.id}/update_status/`, {
+            status: "Ocupada",
+            customerName: "Cliente Casual",
+            activeTime: "0 min",
+            currentTotal: 0
+          })
+          onUpdateTable(res.data.table)
+          onClose()
+        } else if (actionName === "Añadiendo pedido" || actionName === "Tomando orden") {
+          setViewMode("products")
+        } else if (actionName === "Cobrando") {
+          const res = await apiClient.patch(`/tables/tables/${table.id}/update_status/`, {
+            status: "Libre"
+          })
+          onUpdateTable(res.data.table)
+          onClose()
+        } else if (actionName === "Asignando") {
+          const res = await apiClient.patch(`/tables/tables/${table.id}/update_status/`, {
+            status: "Ocupada",
+            activeTime: "0 min",
+            currentTotal: table.currentTotal || 0
+          })
+          onUpdateTable(res.data.table)
+          onClose()
+        } else if (actionName === "Confirmar Pedido") {
+          const totalCompleto = selectedProducts.reduce((acc: number, p: Product) => acc + p.price, 0)
+          const res = await apiClient.patch(`/tables/tables/${table.id}/update_status/`, {
+            status: "Ocupada",
+            customerName: table.customerName || (table.status === "Reservada" ? table.customerName : "Cliente Casual"),
+            activeTime: table.activeTime || "0 min",
+            currentTotal: totalCompleto,
+            orders: selectedProducts
+          })
+          onUpdateTable(res.data.table)
+          setViewMode("detail")
+        }
       }
+    } catch (error) {
+      console.error(error)
+    } finally {
+      setIsLoading(false)
+      setActionLoading(null)
     }
-
-    setIsLoading(false)
-    setActionLoading(null)
   }
 
   return (

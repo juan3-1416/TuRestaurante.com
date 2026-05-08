@@ -54,7 +54,7 @@ INSTALLED_APPS = [
     'apps.users',
     'apps.inventory',
     'apps.tables',
-    # 'apps.orders',
+    'apps.orders',
 ]
 
 MIDDLEWARE = [

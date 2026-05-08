@@ -1,7 +1,8 @@
 import { DialogTitle } from "@/components/ui/dialog"
 import { ArrowLeft, ShoppingCart, Plus } from "lucide-react"
 import { LoadingButton } from "@/shared/components/LoadingButton"
-import { Dispatch, SetStateAction } from "react"
+import { Dispatch, SetStateAction, useEffect, useState } from "react"
+import { apiClient } from "@/lib/axios"
 
 export interface Product {
   id: number;
@@ -29,12 +30,25 @@ export function TableProductMenu({
   actionLoading
 }: TableProductMenuProps) {
   
-  const mockProducts: Product[] = [
-    { id: 1, name: "Hamburguesa Doble", price: 65.00, category: "Comida" },
-    { id: 2, name: "Pizza Familiar", price: 120.00, category: "Comida" },
-    { id: 3, name: "Coca-Cola 2L", price: 25.00, category: "Bebida" },
-    { id: 4, name: "Cerveza Artesanal", price: 35.00, category: "Bebida" },
-  ]
+  const [products, setProducts] = useState<Product[]>([])
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const res = await apiClient.get('/inventory/products/')
+        // Transform incoming data to match expected Product interface
+        const mappedProducts = res.data.map((p: any) => ({
+          ...p,
+          price: parseFloat(p.price),
+          category: p.category_name || "General"
+        }))
+        setProducts(mappedProducts)
+      } catch (err) {
+        console.error("Error fetching products", err)
+      }
+    }
+    fetchProducts()
+  }, [])
 
   // Función para agregar un producto generando una instancia única
   const handleAddProduct = (product: Product) => {
@@ -66,7 +80,7 @@ export function TableProductMenu({
       {/* Lista de Productos Scrollable */}
       <div className="px-6 py-6 space-y-4 overflow-y-auto flex-1 bg-gray-50/50 scrollbar-hide [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         <div className="grid grid-cols-1 gap-3">
-          {mockProducts.map(product => {
+          {products.map(product => {
             // Calculamos cuántas unidades de este producto hay en el carrito
             const quantity = selectedProducts.filter(p => p.id === product.id).length;
             const isSelected = quantity > 0;
