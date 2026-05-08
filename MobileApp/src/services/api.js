@@ -3,6 +3,27 @@ const BASE_URL = "http://192.168.0.14:8000/api";
 const headers = () => ({
   "Content-Type": "application/json",
 });
+export const login = async (username, password) => {
+  console.log("INTENTANDO LOGIN...");
+
+  const res = await fetch("http://192.168.0.14:8000/api/auth/token/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      username,
+      password,
+    }),
+  });
+
+  console.log("STATUS:", res.status);
+
+  const text = await res.text();
+  console.log("RESPUESTA:", text);
+
+  return JSON.parse(text);
+};
 
 // PRODUCTOS
 export const getProductos = async (restaurante_id) => {

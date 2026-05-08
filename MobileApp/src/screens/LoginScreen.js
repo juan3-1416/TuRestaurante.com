@@ -25,7 +25,7 @@ const handleLogin = async () => {
     const data = await login(username, password);
     console.log("LOGIN OK:", data);
 
-    setToken(data.token);
+  
     navigation.replace("Mesas");
   } catch (e) {
     console.log("ERROR REAL:", e);
@@ -64,6 +64,7 @@ const handleLogin = async () => {
         <View style={styles.inputContainer}>
           <Text style={styles.iconInput}>🔒</Text>
           <TextInput
+        
             placeholder="Contraseña"
             secureTextEntry
             value={password}
@@ -154,6 +155,8 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     padding: 12,
+    color: "#5B21B6",
+    
   },
 
   forgot: {
