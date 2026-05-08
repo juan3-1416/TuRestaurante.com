@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/shared/components/LoadingButton"
-import { apiClient } from "@/lib/axios"
 
 // Esquema de validación para el nuevo platillo/variante
 const formSchema = z.object({
@@ -32,24 +31,16 @@ const formSchema = z.object({
   status: z.enum(["Disponible", "Agotado"]),
 })
 
-interface VariantModalProps {
-  subcategoryId: number | string
-  subcategoryName?: string
-  onSuccess?: () => void
-  itemToEdit?: { id: number; name: string; price: string | number; status: string }
-  trigger?: React.ReactNode
-}
-
-export function VariantModal({ subcategoryId, subcategoryName, onSuccess, itemToEdit, trigger }: VariantModalProps) {
+export function VariantModal({ subcategoryName }: { subcategoryName: string }) {
   const [isOpen, setIsOpen] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(formSchema) as any,
     defaultValues: {
-      name: itemToEdit?.name || "",
-      price: itemToEdit ? Number(itemToEdit.price) : 0,
-      status: (itemToEdit?.status as "Disponible" | "Agotado") || "Disponible",
+      name: "",
+      price: 0,
+      status: "Disponible",
     },
   })
 
@@ -57,60 +48,35 @@ export function VariantModal({ subcategoryId, subcategoryName, onSuccess, itemTo
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      if (itemToEdit) {
-        console.log(`Editando variante ${itemToEdit.id}:`, values)
-        await apiClient.put(`/inventory/products/${itemToEdit.id}/`, {
-          ...values,
-          subcategory: subcategoryId
-        })
-      } else {
-        console.log(`Guardando variante en ${subcategoryName}:`, values)
-        await apiClient.post('/inventory/products/', {
-          ...values,
-          subcategory: subcategoryId
-        })
-      }
+      console.log(`Guardando variante en ${subcategoryName}:`, values)
+      
+      // Simulamos la petición POST al backend
+      await new Promise((resolve) => setTimeout(resolve, 1500))
       
       // Cerramos el modal y limpiamos el formulario si fue exitoso
       setIsOpen(false)
       form.reset()
-
-      // Avisamos al componente padre
-      if (onSuccess) {
-        onSuccess()
-      }
     } catch (error) {
-      console.error("Error al guardar variante:", error)
-      setIsOpen(false)
-      form.reset()
-      if (onSuccess) onSuccess()
+      console.error("Error al guardar:", error)
     }
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {/* Botón que dispara el modal con una pequeña transición al pasar el mouse */}
       <DialogTrigger asChild>
-        {trigger ? (
-          trigger
-        ) : (
-          <button className="text-[11px] font-bold text-restaurante-primario hover:underline flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95">
-            <Plus size={13} /> Añadir Variante
-          </button>
-        )}
+        <button className="text-[11px] font-bold text-restaurante-primario hover:underline flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95">
+          <Plus size={13} /> Añadir Variante
+        </button>
       </DialogTrigger>
 
+      {/* Contenedor del Modal con un efecto de Glassmorphism más profundo y bordes redondeados */}
       <DialogContent className="bg-white/80 backdrop-blur-xl border border-white/40 shadow-2xl shadow-black/15 rounded-3xl sm:max-w-[440px] p-7 gap-0">
         <DialogHeader className="border-b border-gray-100 pb-5 mb-6">
           <DialogTitle className="text-2xl font-bold text-restaurante-oscuro tracking-tight drop-shadow-sm">
-            {itemToEdit ? (
-              <>Editar <span className="text-restaurante-acento bg-clip-text bg-linear-to-r from-restaurante-primario to-restaurante-acento">{itemToEdit.name}</span></>
-            ) : (
-              <>Nueva variante en <span className="text-restaurante-acento bg-clip-text bg-linear-to-r from-restaurante-primario to-restaurante-acento">{subcategoryName}</span></>
-            )}
+            Nueva variante en <span className="text-restaurante-acento bg-clip-text bg-linear-to-r from-restaurante-primario to-restaurante-acento">{subcategoryName}</span>
           </DialogTitle>
-          <p className="text-sm text-gray-500 mt-1.5">
-            {itemToEdit ? "Modifica los datos del platillo." : "Completa los datos del nuevo platillo o bebida."}
-          </p>
+          <p className="text-sm text-gray-500 mt-1.5">Completa los datos del nuevo platillo o bebida.</p>
         </DialogHeader>
 
         <Form {...form}>
@@ -187,7 +153,7 @@ export function VariantModal({ subcategoryId, subcategoryName, onSuccess, itemTo
                 loadingText="Guardando..."
                 className="w-full sm:w-auto h-11 px-7 bg-linear-to-r from-restaurante-primario to-restaurante-acento hover:from-restaurante-oscuro hover:to-restaurante-primario text-white text-base font-semibold rounded-xl transition-all duration-300 shadow-md shadow-restaurante-primario/30 hover:shadow-lg hover:shadow-restaurante-oscuro/35 hover:scale-[1.02] active:scale-[0.98]"
               >
-                {itemToEdit ? "Actualizar Variante" : "Guardar Variante"}
+                Guardar Variante
               </LoadingButton>
             </div>
 
