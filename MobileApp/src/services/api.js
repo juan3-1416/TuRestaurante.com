@@ -1,4 +1,4 @@
-const BASE_URL = "http://192.168.0.14:8000/api";
+const BASE_URL = "http://192.168.0.17:8000/api";
 
 const headers = () => ({
   "Content-Type": "application/json",
@@ -6,7 +6,7 @@ const headers = () => ({
 export const login = async (username, password) => {
   console.log("INTENTANDO LOGIN...");
 
-  const res = await fetch("http://192.168.0.14:8000/api/auth/token/", {
+  const res = await fetch("http://192.168.0.17:8000/api/auth/token/", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

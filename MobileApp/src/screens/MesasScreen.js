@@ -9,20 +9,35 @@ import {
 import Icon from "react-native-vector-icons/Feather";
 import { colors } from "../theme/colors";
 
-const TABLES = [
+const INITIAL_TABLES = [
   { id: "1", number: 1, capacity: 4, status: "Libre" },
   { id: "2", number: 2, capacity: 4, status: "Ocupada", total: 150.5, cliente: "Familia Perez" },
   { id: "3", number: 3, capacity: 2, status: "Reservada", hora: "19:30", cliente: "Juan Gomez" },
   { id: "4", number: 4, capacity: 6, status: "Libre" },
 ];
 
-export default function MesasScreen({ navigation }) {
-  const [filter, setFilter] = useState("Todas");
 
+export default function MesasScreen({ navigation }) {
+  const crearMesa = () => {
+  const nuevaMesa = {
+    id: Date.now().toString(),
+    number: tables.length + 1,
+    capacity: 4,
+    status: "Libre",
+  };
+
+  setTables([...tables, nuevaMesa]);
+};
+
+const eliminarMesa = (id) => {
+  setTables(tables.filter((mesa) => mesa.id !== id));
+};
+  const [filter, setFilter] = useState("Todas");
+const [tables, setTables] = useState(INITIAL_TABLES);
   const filtered =
     filter === "Todas"
-      ? TABLES
-      : TABLES.filter((t) => t.status === filter);
+      ? tables
+      : tables.filter((t) => t.status === filter);
 
   const getStyles = (status) => {
     switch (status) {
@@ -91,7 +106,14 @@ export default function MesasScreen({ navigation }) {
   return (
     <View style={styles.container}>
       {/* HEADER */}
-      <Text style={styles.header}>Mapa de Mesas</Text>
+      <View style={styles.headerRow}>
+  <Text style={styles.header}>Mapa de Mesas</Text>
+
+  <TouchableOpacity style={styles.addMesaBtn} onPress={crearMesa}>
+    <Text style={styles.addMesaText}>+ Mesa</Text>
+  </TouchableOpacity>
+</View>
+      
 
       {/* FILTROS */}
       <View style={styles.filters}>
@@ -243,4 +265,36 @@ const styles = StyleSheet.create({
     color: "#22C55E",
     fontWeight: "bold",
   },
+  headerRow: {
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: 15,
+},
+
+addMesaBtn: {
+  backgroundColor: "#4C1D95",
+  paddingHorizontal: 14,
+  paddingVertical: 8,
+  borderRadius: 12,
+},
+
+addMesaText: {
+  color: "#fff",
+  fontWeight: "bold",
+},
+
+deleteBtn: {
+  marginTop: 10,
+  backgroundColor: "#FEE2E2",
+  paddingVertical: 7,
+  borderRadius: 10,
+  alignItems: "center",
+},
+
+deleteText: {
+  color: "#DC2626",
+  fontWeight: "bold",
+  fontSize: 12,
+},
 });

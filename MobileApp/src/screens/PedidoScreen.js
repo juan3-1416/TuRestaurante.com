@@ -12,10 +12,9 @@ import {
   ScrollView,
 } from 'react-native';
 import { colors } from '../theme/colors';
-import { getProductos, crearPedido } from '../services/api';
 
 export default function PedidoScreen({ route, navigation }) {
-  const { mesa, usuario } = route.params;
+  const { mesa } = route.params;
 
   const [productos, setProductos] = useState([]);
   const [carrito, setCarrito] = useState([]); // [{ producto, cantidad, notas }]
@@ -23,20 +22,17 @@ export default function PedidoScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
   const [vista, setVista] = useState('productos'); // 'productos' | 'carrito'
-
-  useEffect(() => {
-    const cargar = async () => {
-      try {
-        const data = await getProductos(usuario.restaurante_id);
-        setProductos(data);
-      } catch {
-        Alert.alert('Error', 'No se pudieron cargar los productos.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    cargar();
-  }, [usuario.restaurante_id]);
+const PRODUCTOS_LOCAL = [
+  { id: 1, nombre: 'Hamburguesa', precio: 25, categoria: 'Comida' },
+  { id: 2, nombre: 'Pizza personal', precio: 30, categoria: 'Comida' },
+  { id: 3, nombre: 'Pollo broaster', precio: 35, categoria: 'Comida' },
+  { id: 4, nombre: 'Gaseosa', precio: 8, categoria: 'Bebidas' },
+  { id: 5, nombre: 'Jugo natural', precio: 12, categoria: 'Bebidas' },
+];
+useEffect(() => {
+  setProductos(PRODUCTOS_LOCAL);
+  setLoading(false);
+}, []);
 
   const agregarAlCarrito = (producto) => {
     setCarrito((prev) => {
@@ -85,32 +81,22 @@ export default function PedidoScreen({ route, navigation }) {
 
     Alert.alert(
       'Confirmar pedido',
-      `Mesa ${mesa.numero} — ${carrito.length} ítem(s)\nTotal: Bs. ${totalCarrito.toFixed(2)}`,
+      `Mesa ${mesa.number} — ${carrito.length} ítem(s)\nTotal: Bs. ${totalCarrito.toFixed(2)}`,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Enviar',
           onPress: async () => {
             setEnviando(true);
-            try {
-              await crearPedido({
-                mesa_id: mesa.id,
-                mesero_id: usuario.id,
-                restaurante_id: usuario.restaurante_id,
-                items: carrito.map((i) => ({
-                  producto_id: i.producto.id,
-                  cantidad: i.cantidad,
-                  notas: i.notas,
-                })),
-              });
-              Alert.alert('¡Pedido enviado!', 'El cajero ya puede verlo.', [
-                { text: 'OK', onPress: () => navigation.goBack() },
-              ]);
-            } catch (error) {
-              Alert.alert('Error', 'No se pudo enviar el pedido. Intenta de nuevo.');
-            } finally {
-              setEnviando(false);
-            }
+try {
+  Alert.alert('Pedido registrado', 'Pedido guardado localmente para prueba.', [
+    { text: 'OK', onPress: () => navigation.goBack() },
+  ]);
+} catch (error) {
+  Alert.alert('Error', 'No se pudo enviar el pedido.');
+} finally {
+  setEnviando(false);
+}
           },
         },
       ]
@@ -132,7 +118,7 @@ export default function PedidoScreen({ route, navigation }) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Text style={styles.backText}>← Mesas</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Mesa {mesa.numero}</Text>
+        <Text style={styles.headerTitle}>Mesa {mesa.number}</Text>
         <TouchableOpacity
           style={styles.carritoBtn}
           onPress={() => setVista(vista === 'productos' ? 'carrito' : 'productos')}
@@ -262,6 +248,7 @@ export default function PedidoScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.lightGray },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
   header: {
     backgroundColor: colors.dark,
     paddingTop: 48,
@@ -271,39 +258,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+
   backBtn: { padding: 4 },
   backText: { color: colors.secondary, fontSize: 14 },
   headerTitle: { color: colors.white, fontSize: 20, fontWeight: 'bold' },
+
   carritoBtn: {
     backgroundColor: colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
   },
+
   carritoText: { color: colors.white, fontSize: 13, fontWeight: '600' },
   list: { padding: 16 },
-  productoCard: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    elevation: 1,
-  },
+
+productoCard: {
+  backgroundColor: '#FFFFFF',
+  borderRadius: 12,
+  padding: 14,
+  marginBottom: 10,
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  borderWidth: 1,
+  borderColor: '#E5E7EB',
+},
   productoInfo: { flex: 1, marginRight: 10 },
-  productoNombre: { fontSize: 15, fontWeight: '600', color: colors.text },
-  productoPrecio: { fontSize: 14, color: colors.primary, marginTop: 2 },
-  productoCategoria: { fontSize: 12, color: colors.secondary, marginTop: 2 },
+productoNombre: {
+  fontSize: 17,
+  fontWeight: 'bold',
+  color: '#111827',
+},
+
+productoPrecio: {
+  fontSize: 15,
+  color: '#0F828C',
+  marginTop: 4,
+  fontWeight: '600',
+},
+
+productoCategoria: {
+  fontSize: 13,
+  color: '#6B7280',
+  marginTop: 2,
+},
+
   addBtn: {
     backgroundColor: colors.primary,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
   },
+
   addBtnText: { color: colors.white, fontWeight: '600', fontSize: 13 },
+
   cantidadControl: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+
   ctrlBtn: {
     backgroundColor: colors.lightGray,
     width: 30,
@@ -312,8 +323,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   ctrlBtnText: { fontSize: 18, color: colors.dark, fontWeight: 'bold' },
-  cantidadNum: { fontSize: 16, fontWeight: 'bold', color: colors.dark, minWidth: 20, textAlign: 'center' },
+
+  cantidadNum: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: colors.dark,
+    minWidth: 20,
+    textAlign: 'center',
+  },
+
   carritoItem: {
     backgroundColor: colors.white,
     borderRadius: 12,
@@ -321,14 +341,17 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     elevation: 1,
   },
+
   carritoItemTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 4,
   },
+
   carritoNombre: { fontSize: 15, fontWeight: '600', color: colors.text, flex: 1 },
   carritoSubtotal: { fontSize: 14, color: colors.primary, marginBottom: 8 },
+
   notaInput: {
     borderWidth: 1,
     borderColor: '#ddd',
@@ -339,6 +362,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     backgroundColor: colors.lightGray,
   },
+
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -347,16 +371,31 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 8,
   },
+
   totalLabel: { fontSize: 16, fontWeight: 'bold', color: colors.dark },
   totalValue: { fontSize: 18, fontWeight: 'bold', color: colors.accent },
-  footer: { padding: 16, backgroundColor: colors.white, borderTopWidth: 1, borderColor: '#eee' },
+
+  footer: {
+    padding: 16,
+    backgroundColor: colors.white,
+    borderTopWidth: 1,
+    borderColor: '#eee',
+  },
+
   enviarBtn: {
     backgroundColor: colors.accent,
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
   },
+
   btnDisabled: { opacity: 0.6 },
   enviarBtnText: { color: colors.white, fontSize: 16, fontWeight: 'bold' },
-  emptyText: { textAlign: 'center', color: colors.secondary, marginTop: 40, fontSize: 15 },
+
+  emptyText: {
+    textAlign: 'center',
+    color: colors.secondary,
+    marginTop: 40,
+    fontSize: 15,
+  },
 });
