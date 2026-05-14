@@ -85,6 +85,30 @@ export function MenuManager() {
     }
   }
 
+  const handleDeleteCategory = async (categoryId: string) => {
+    if (window.confirm("¿Estás seguro de que deseas eliminar esta categoría? Se eliminarán también sus subcategorías y platillos.")) {
+      try {
+        await apiClient.delete(`/inventory/categories/${categoryId}/`)
+        fetchMenu()
+      } catch (error) {
+        console.error("Error al eliminar categoría", error)
+        alert("Hubo un problema al intentar eliminar la categoría.")
+      }
+    }
+  }
+
+  const handleDeleteSubcategory = async (subcategoryId: number) => {
+    if (window.confirm("¿Estás seguro de que deseas eliminar esta subcategoría? Se eliminarán también sus platillos.")) {
+      try {
+        await apiClient.delete(`/inventory/subcategories/${subcategoryId}/`)
+        fetchMenu()
+      } catch (error) {
+        console.error("Error al eliminar subcategoría", error)
+        alert("Hubo un problema al intentar eliminar la subcategoría.")
+      }
+    }
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex justify-between items-center bg-white/20 backdrop-blur-md p-6 rounded-3xl border border-white/40 shadow-sm">
@@ -105,21 +129,42 @@ export function MenuManager() {
           return (
             <div key={cat.id} className="group overflow-hidden">
               {/* Encabezado de Categoría (Acordeón) */}
-              <button
-                onClick={() => toggleSection(cat.id)}
+              <div
                 className={`w-full flex items-center justify-between p-5 rounded-3xl transition-all duration-300 border ${isOpen
                     ? "bg-restaurante-primario text-white border-transparent shadow-lg"
                     : "bg-white/40 backdrop-blur-md text-restaurante-oscuro border-white/60 hover:bg-white/60"
                   }`}
               >
-                <div className="flex items-center gap-4">
+                <button
+                  onClick={() => toggleSection(cat.id)}
+                  className="flex-1 flex items-center gap-4 text-left"
+                >
                   <div className={`p-2 rounded-xl ${isOpen ? "bg-white/20" : "bg-restaurante-claro/20"}`}>
                     <Icon size={20} />
                   </div>
                   <span className="font-bold text-lg">{cat.name}</span>
+                </button>
+                <div className="flex items-center gap-2">
+                  <CategoryModal
+                    categoryToEdit={cat}
+                    onCategoryCreated={fetchMenu}
+                    trigger={
+                      <button className="p-2 hover:bg-white/20 rounded-lg transition-colors">
+                        <Edit2 size={18} />
+                      </button>
+                    }
+                  />
+                  <button
+                    onClick={() => handleDeleteCategory(cat.id)}
+                    className="p-2 hover:bg-white/20 rounded-lg hover:text-red-300 transition-colors"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                  <button onClick={() => toggleSection(cat.id)} className="p-2">
+                    {isOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+                  </button>
                 </div>
-                {isOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-              </button>
+              </div>
 
               {/* Contenido Plegable */}
               <div className={`grid transition-all duration-500 ease-in-out ${isOpen ? "grid-rows-[1fr] opacity-100 mt-4" : "grid-rows-[0fr] opacity-0"
@@ -136,11 +181,30 @@ export function MenuManager() {
                         <h4 className="text-restaurante-acento font-bold uppercase tracking-widest text-xs flex items-center gap-2">
                           <ChevronRight size={14} /> {sub.name}
                         </h4>
-                        <VariantModal 
-                          subcategoryId={sub.id} 
-                          subcategoryName={sub.name} 
-                          onSuccess={fetchMenu} 
-                        />
+                        <div className="flex items-center gap-2">
+                          <SubcategoryModal
+                            subcategoryToEdit={sub}
+                            categoryId={cat.id.toString()}
+                            categoryName={cat.name}
+                            onSubcategoryCreated={fetchMenu}
+                            trigger={
+                              <button className="p-1.5 hover:bg-white rounded-lg text-gray-400 hover:text-restaurante-acento transition-colors">
+                                <Edit2 size={16} />
+                              </button>
+                            }
+                          />
+                          <button
+                            onClick={() => handleDeleteSubcategory(sub.id)}
+                            className="p-1.5 hover:bg-white rounded-lg text-gray-400 hover:text-red-500 transition-colors"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                          <VariantModal 
+                            subcategoryId={sub.id} 
+                            subcategoryName={sub.name} 
+                            onSuccess={fetchMenu} 
+                          />
+                        </div>
                       </div>
 
                       <div className="grid gap-3">

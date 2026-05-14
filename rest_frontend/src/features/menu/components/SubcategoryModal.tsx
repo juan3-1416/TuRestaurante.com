@@ -31,19 +31,20 @@ const formSchema = z.object({
 })
 
 interface SubcategoryModalProps {
-  categoryId: string
-  categoryName: string
+  categoryId?: string
+  categoryName?: string
   onSubcategoryCreated?: () => void
+  subcategoryToEdit?: { id: number; name: string }
+  trigger?: React.ReactNode
 }
 
-export function SubcategoryModal({ categoryId, categoryName, onSubcategoryCreated }: SubcategoryModalProps) {
+export function SubcategoryModal({ categoryId, categoryName, onSubcategoryCreated, subcategoryToEdit, trigger }: SubcategoryModalProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(formSchema) as any,
+    resolver: zodResolver(formSchema),
     defaultValues: {
-      name: "",
+      name: subcategoryToEdit?.name || "",
     },
   })
 
@@ -51,17 +52,22 @@ export function SubcategoryModal({ categoryId, categoryName, onSubcategoryCreate
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      console.log(`Guardando nueva subcategoría en ${categoryName}:`, values)
-      
-      // Petición real al backend: la URL puede variar según tu API, asumimos algo como:
-      await apiClient.post('/inventory/subcategories/', {
-        ...values,
-        category: categoryId
-      })
+      if (subcategoryToEdit) {
+        console.log(`Actualizando subcategoría:`, values)
+        await apiClient.put(`/inventory/subcategories/${subcategoryToEdit.id}/`, values)
+      } else {
+        console.log(`Guardando nueva subcategoría en ${categoryName}:`, values)
+        await apiClient.post('/inventory/subcategories/', {
+          ...values,
+          category: categoryId
+        })
+      }
       
       // Cerramos el modal y limpiamos el formulario
       setIsOpen(false)
-      form.reset()
+      if (!subcategoryToEdit) {
+        form.reset()
+      }
 
       // Avisamos al componente padre
       if (onSubcategoryCreated) {
@@ -79,17 +85,27 @@ export function SubcategoryModal({ categoryId, categoryName, onSubcategoryCreate
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <button className="flex items-center justify-center w-full py-3 border-2 border-dashed border-white/50 text-restaurante-primario font-semibold rounded-2xl bg-white/10 hover:bg-white/30 hover:border-restaurante-primario/50 transition-all">
-          <Plus className="mr-2 h-4 w-4" /> Nueva Subcategoría
-        </button>
+        {trigger ? (
+          trigger
+        ) : (
+          <button className="flex items-center justify-center w-full py-3 border-2 border-dashed border-white/50 text-restaurante-primario font-semibold rounded-2xl bg-white/10 hover:bg-white/30 hover:border-restaurante-primario/50 transition-all">
+            <Plus className="mr-2 h-4 w-4" /> Nueva Subcategoría
+          </button>
+        )}
       </DialogTrigger>
 
       <DialogContent className="bg-white/80 backdrop-blur-xl border border-white/40 shadow-2xl shadow-black/15 rounded-3xl sm:max-w-[440px] p-7 gap-0">
         <DialogHeader className="border-b border-gray-100 pb-5 mb-6">
           <DialogTitle className="text-2xl font-bold text-restaurante-oscuro tracking-tight drop-shadow-sm">
-            Nueva Subcategoría en <span className="text-restaurante-acento bg-clip-text bg-linear-to-r from-restaurante-primario to-restaurante-acento">{categoryName}</span>
+            {subcategoryToEdit ? (
+              "Editar Subcategoría"
+            ) : (
+              <>Nueva Subcategoría en <span className="text-restaurante-acento bg-clip-text bg-linear-to-r from-restaurante-primario to-restaurante-acento">{categoryName}</span></>
+            )}
           </DialogTitle>
-          <p className="text-sm text-gray-500 mt-1.5">Añade un nuevo grupo de platillos.</p>
+          <p className="text-sm text-gray-500 mt-1.5">
+            {subcategoryToEdit ? "Modifica los detalles de la subcategoría." : "Añade un nuevo grupo de platillos."}
+          </p>
         </DialogHeader>
 
         <Form {...form}>
@@ -118,10 +134,10 @@ export function SubcategoryModal({ categoryId, categoryName, onSubcategoryCreate
               <LoadingButton 
                 type="submit" 
                 isLoading={isSubmitting}
-                loadingText="Creando..."
+                loadingText={subcategoryToEdit ? "Guardando..." : "Creando..."}
                 className="w-full sm:w-auto h-11 px-7 bg-linear-to-r from-restaurante-primario to-restaurante-acento hover:from-restaurante-oscuro hover:to-restaurante-primario text-white text-base font-semibold rounded-xl transition-all duration-300 shadow-md shadow-restaurante-primario/30 hover:shadow-lg hover:shadow-restaurante-oscuro/35 hover:scale-[1.02] active:scale-[0.98]"
               >
-                Crear Subcategoría
+                {subcategoryToEdit ? "Guardar Cambios" : "Crear Subcategoría"}
               </LoadingButton>
             </div>
 

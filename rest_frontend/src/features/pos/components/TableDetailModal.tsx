@@ -12,9 +12,11 @@ interface TableDetailProps {
   isOpen: boolean
   onClose: () => void
   onUpdateTable: (table: Table) => void
+  onDeleteTable?: (id: string) => void
+  onRefetch?: () => void
 }
 
-export function TableDetailModal({ table, isOpen, onClose, onUpdateTable }: TableDetailProps) {
+export function TableDetailModal({ table, isOpen, onClose, onUpdateTable, onDeleteTable, onRefetch }: TableDetailProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<"detail" | "products">("detail")
@@ -134,6 +136,8 @@ export function TableDetailModal({ table, isOpen, onClose, onUpdateTable }: Tabl
             selectedProducts={selectedProducts}
             setSelectedProducts={setSelectedProducts}
             onConfirmReservation={handleConfirmReservation}
+            onDeleteTable={onDeleteTable}
+            onRefetch={onRefetch}
           />
         ) : (
           <TableProductMenu 
