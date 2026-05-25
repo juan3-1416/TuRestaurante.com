@@ -1,9 +1,10 @@
 import { DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Users, Clock, Receipt, CreditCard, PlusCircle, UserCheck, Coffee, Trash2, CalendarClock, X } from "lucide-react"
+import { Users, Clock, Receipt, CreditCard, PlusCircle, UserCheck, Coffee, Trash2, CalendarClock, X, Edit2 } from "lucide-react"
 import { LoadingButton } from "@/shared/components/LoadingButton"
 import { Table } from "./TableMap"
 import { Product } from "./TableProductMenu"
 import { Dispatch, SetStateAction, useState } from "react"
+import { TableModal } from "./TableModal"
 
 interface TableStatusDetailProps {
   table: Table
@@ -13,6 +14,8 @@ interface TableStatusDetailProps {
   selectedProducts: Product[]
   setSelectedProducts: Dispatch<SetStateAction<Product[]>>
   onConfirmReservation: (name: string, time: string) => void
+  onDeleteTable?: (id: string) => void
+  onRefetch?: () => void
 }
 
 export function TableStatusDetail({ 
@@ -22,7 +25,9 @@ export function TableStatusDetail({
   handleAction,
   selectedProducts,
   setSelectedProducts,
-  onConfirmReservation
+  onConfirmReservation,
+  onDeleteTable,
+  onRefetch
 }: TableStatusDetailProps) {
   
   // Estados para el formulario de reserva
@@ -71,26 +76,22 @@ export function TableStatusDetail({
               </div>
             </div>
             
-            <div className="relative">
-              <div className={`absolute -inset-1 rounded-full blur opacity-40 animate-pulse ${
-                table.status === 'Libre' ? 'bg-green-400' :
-                table.status === 'Ocupada' ? 'bg-red-400' :
-                'bg-yellow-400'
-              }`}></div>
-              <span className={`relative px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border shadow-sm flex items-center gap-1 ${
-                table.status === 'Libre' ? 'bg-green-100 text-green-700 border-green-200' :
-                table.status === 'Ocupada' ? 'bg-red-100 text-red-700 border-red-200' :
-                'bg-yellow-100 text-yellow-700 border-yellow-200'
-              }`}>
-                <span className={`w-2 h-2 rounded-full ${
-                  table.status === 'Libre' ? 'bg-green-500' :
-                  table.status === 'Ocupada' ? 'bg-red-500' :
-                  'bg-yellow-500'
-                }`}></span>
-                {table.status === 'Libre' ? 'Disponible' : 
-                 table.status === 'Ocupada' ? 'En Uso' : 
-                 'Reservada'}
-              </span>
+            <div className="flex gap-2">
+              <TableModal 
+                tableToEdit={{ id: table.id, number: table.number, capacity: table.capacity }}
+                onTableCreated={onRefetch}
+                trigger={
+                  <button className="px-4 py-1.5 rounded-full bg-white text-gray-500 hover:text-restaurante-primario hover:bg-restaurante-primario/10 border shadow-sm transition-all flex items-center gap-1.5 text-xs font-black uppercase tracking-widest">
+                    <Edit2 size={14} /> Editar
+                  </button>
+                }
+              />
+              <button 
+                onClick={() => onDeleteTable?.(table.id)}
+                className="px-4 py-1.5 rounded-full bg-white text-gray-500 hover:text-red-500 hover:bg-red-50 border shadow-sm transition-all flex items-center gap-1.5 text-xs font-black uppercase tracking-widest"
+              >
+                <Trash2 size={14} /> Eliminar
+              </button>
             </div>
           </div>
         </DialogHeader>

@@ -25,26 +25,26 @@ import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/shared/components/LoadingButton"
 import { apiClient } from "@/lib/axios"
 
-// Esquema de validación para la nueva categoría
+// Esquema de validación para la mesa
 const formSchema = z.object({
-  name: z.string().min(3, { message: "El nombre debe tener al menos 3 caracteres." }),
-  icon: z.enum(["Utensils", "Coffee", "Drumstick", "LayoutGrid"]),
+  number: z.string().min(1, { message: "El número de mesa es requerido." }),
+  capacity: z.string().min(1, { message: "La capacidad es requerida." }),
 })
 
-interface CategoryModalProps {
-  onCategoryCreated?: () => void
-  categoryToEdit?: { id: string; name: string; icon: string }
+interface TableModalProps {
+  onTableCreated?: () => void
+  tableToEdit?: { id: string; number: number; capacity: number }
   trigger?: React.ReactNode
 }
 
-export function CategoryModal({ onCategoryCreated, categoryToEdit, trigger }: CategoryModalProps) {
+export function TableModal({ onTableCreated, tableToEdit, trigger }: TableModalProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: categoryToEdit?.name || "",
-      icon: (categoryToEdit?.icon as z.infer<typeof formSchema>["icon"]) || "Utensils",
+      number: tableToEdit?.number?.toString() || "1",
+      capacity: tableToEdit?.capacity?.toString() || "2",
     },
   })
 
@@ -52,23 +52,27 @@ export function CategoryModal({ onCategoryCreated, categoryToEdit, trigger }: Ca
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      if (categoryToEdit) {
-        console.log("Actualizando categoría:", values)
-        await apiClient.put(`/inventory/categories/${categoryToEdit.id}/`, values)
-      } else {
-        console.log("Guardando nueva categoría:", values)
-        await apiClient.post('/inventory/categories/', values)
+      const payload = {
+        ...values,
+        number: parseInt(values.number) || 1,
+        capacity: parseInt(values.capacity) || 1
       }
       
-      // Cerramos el modal y limpiamos el formulario si fue exitoso
+      if (tableToEdit) {
+        console.log("Actualizando mesa:", payload)
+        await apiClient.put(`/tables/tables/${tableToEdit.id}/`, payload)
+      } else {
+        console.log("Guardando nueva mesa:", payload)
+        await apiClient.post('/tables/tables/', payload)
+      }
+      
       setIsOpen(false)
-      if (!categoryToEdit) {
+      if (!tableToEdit) {
         form.reset()
       }
 
-      // Avisamos al componente padre que recargue las categorías
-      if (onCategoryCreated) {
-        onCategoryCreated()
+      if (onTableCreated) {
+        onTableCreated()
       }
     } catch (error) {
       console.error("Error al guardar:", error)
@@ -82,7 +86,7 @@ export function CategoryModal({ onCategoryCreated, categoryToEdit, trigger }: Ca
           trigger
         ) : (
           <button className="flex items-center bg-restaurante-primario hover:bg-restaurante-acento text-white rounded-2xl px-6 py-2 transition-colors font-medium">
-            <Plus className="mr-2 h-4 w-4" /> Nueva Categoría
+            <Plus className="mr-2 h-4 w-4" /> Agregar Mesa
           </button>
         )}
       </DialogTrigger>
@@ -90,26 +94,26 @@ export function CategoryModal({ onCategoryCreated, categoryToEdit, trigger }: Ca
       <DialogContent className="bg-white/80 backdrop-blur-xl border border-white/40 shadow-2xl shadow-black/15 rounded-3xl sm:max-w-[440px] p-7 gap-0">
         <DialogHeader className="border-b border-gray-100 pb-5 mb-6">
           <DialogTitle className="text-2xl font-bold text-restaurante-oscuro tracking-tight drop-shadow-sm">
-            {categoryToEdit ? "Editar Categoría" : "Nueva Categoría"}
+            {tableToEdit ? "Editar Mesa" : "Nueva Mesa"}
           </DialogTitle>
           <p className="text-sm text-gray-500 mt-1.5">
-            {categoryToEdit ? "Modifica los detalles de la categoría." : "Añade una nueva sección a tu menú."}
+            {tableToEdit ? "Modifica los detalles de la mesa." : "Añade una nueva mesa al restaurante."}
           </p>
         </DialogHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
             
-            {/* Campo: Nombre */}
             <FormField
               control={form.control}
-              name="name"
+              name="number"
               render={({ field }) => (
                 <FormItem className="space-y-1.5">
-                  <FormLabel className="text-sm font-semibold text-restaurante-oscuro/90">Nombre de la categoría</FormLabel>
+                  <FormLabel className="text-sm font-semibold text-restaurante-oscuro/90">Número de Mesa</FormLabel>
                   <FormControl>
                     <Input 
-                      placeholder="Ej. Bebidas, Postres..." 
+                      type="number"
+                      placeholder="Ej. 1, 2, 3..." 
                       disabled={isSubmitting} 
                       className="h-11 px-4 bg-white/60 border border-gray-200/70 rounded-xl text-base transition-all duration-200 focus:bg-white focus:border-restaurante-acento focus:ring-2 focus:ring-restaurante-acento/15 disabled:cursor-not-allowed disabled:opacity-60"
                       {...field} 
@@ -120,24 +124,20 @@ export function CategoryModal({ onCategoryCreated, categoryToEdit, trigger }: Ca
               )}
             />
 
-            {/* Campo: Icono */}
             <FormField
               control={form.control}
-              name="icon"
+              name="capacity"
               render={({ field }) => (
                 <FormItem className="space-y-1.5">
-                  <FormLabel className="text-sm font-semibold text-restaurante-oscuro/90">Icono representativo</FormLabel>
+                  <FormLabel className="text-sm font-semibold text-restaurante-oscuro/90">Capacidad (Personas)</FormLabel>
                   <FormControl>
-                    <select 
-                      disabled={isSubmitting}
-                      className="flex h-11 w-full rounded-xl border border-gray-200/70 bg-white/60 px-4 py-2 text-base transition-all duration-200 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-restaurante-acento/15 focus-visible:border-restaurante-acento focus-visible:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-                      {...field}
-                    >
-                      <option value="Utensils">Utensilios (Comida general)</option>
-                      <option value="Coffee">Taza de Café (Bebidas/Desayunos)</option>
-                      <option value="Drumstick">Pierna de Pollo (Carnes)</option>
-                      <option value="LayoutGrid">Cuadrícula (Otros)</option>
-                    </select>
+                    <Input 
+                      type="number"
+                      placeholder="Ej. 2, 4, 6..." 
+                      disabled={isSubmitting} 
+                      className="h-11 px-4 bg-white/60 border border-gray-200/70 rounded-xl text-base transition-all duration-200 focus:bg-white focus:border-restaurante-acento focus:ring-2 focus:ring-restaurante-acento/15 disabled:cursor-not-allowed disabled:opacity-60"
+                      {...field} 
+                    />
                   </FormControl>
                   <FormMessage className="text-xs text-red-600 pt-1" />
                 </FormItem>
@@ -148,10 +148,10 @@ export function CategoryModal({ onCategoryCreated, categoryToEdit, trigger }: Ca
               <LoadingButton 
                 type="submit" 
                 isLoading={isSubmitting}
-                loadingText={categoryToEdit ? "Guardando..." : "Creando..."}
+                loadingText={tableToEdit ? "Guardando..." : "Creando..."}
                 className="w-full sm:w-auto h-11 px-7 bg-linear-to-r from-restaurante-primario to-restaurante-acento hover:from-restaurante-oscuro hover:to-restaurante-primario text-white text-base font-semibold rounded-xl transition-all duration-300 shadow-md shadow-restaurante-primario/30 hover:shadow-lg hover:shadow-restaurante-oscuro/35 hover:scale-[1.02] active:scale-[0.98]"
               >
-                {categoryToEdit ? "Guardar Cambios" : "Crear Categoría"}
+                {tableToEdit ? "Guardar Cambios" : "Agregar Mesa"}
               </LoadingButton>
             </div>
 
