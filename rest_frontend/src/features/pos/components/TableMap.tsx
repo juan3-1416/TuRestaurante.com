@@ -1,14 +1,13 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { TableDetailModal } from "./TableDetailModal"
-import { Receipt, Play, Filter, CheckCircle2, CalendarClock, Edit2, Trash2 } from "lucide-react"
+import { Receipt, Play, Filter, CheckCircle2, CalendarClock, Plus, Trash2 } from "lucide-react"
 import { apiClient } from "@/lib/axios"
-import { TableModal } from "./TableModal"
 
 import { Product } from "./TableProductMenu"
 
-// Tipos y Datos Simulados
+// Tipos
 export type TableStatus = "Libre" | "Ocupada" | "Reservada" | "Todas"
 
 export interface Table {
@@ -26,54 +25,72 @@ export function TableMap() {
   const [activeFilter, setActiveFilter] = useState<TableStatus>("Todas")
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
   const [tables, setTables] = useState<Table[]>([])
+  const [isCreating, setIsCreating] = useState(false)
 
-  const fetchTables = useCallback(async () => {
+  const handleCreateTable = async () => {
+    setIsCreating(true)
+    try {
+      const maxNumber = tables.length > 0 ? Math.max(...tables.map(t => t.number)) : 0;
+      await apiClient.post('/tables/tables/', {
+        number: (maxNumber + 1).toString(), // <-- Ahora se envía 'number', corrigiendo el error 400
+        capacity: 4,
+        status: 'Libre'
+      })
+      fetchTables()
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const handleDeleteTable = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation()
+    if (confirm("¿Estás seguro de que deseas eliminar esta mesa?")) {
+      try {
+        await apiClient.delete(`/tables/tables/${id}/`)
+        fetchTables()
+      } catch (err) {
+        console.error(err)
+      }
+    }
+  }
+
+  const fetchTables = async () => {
     try {
       const res = await apiClient.get('/tables/tables/')
       // Transform incoming data to make sure numeric values are correct
-      const transformed = res.data.map((t: Record<string, unknown>) => ({
+      const transformed = res.data.map((t: any) => ({
         ...t,
-        id: String(t.id),
-        number: parseInt(String(t.number)) || 0,
-      })) as Table[]
+        id: t.id.toString(),
+        number: parseInt(t.number) || 0,
+      }))
       setTables(transformed)
     } catch (err) {
       console.error("Error fetching tables", err)
     }
-  }, [])
+  }
 
   useEffect(() => {
-    const initFetch = async () => {
-      await fetchTables()
-    }
-    initFetch()
+    fetchTables()
     // Optionally we could set an interval to poll
-  }, [fetchTables])
+  }, [])
 
   const handleUpdateTable = (updatedTable: Table) => {
     // When a table is updated, we fetch everything from server to be sure, 
     // or we could optimistically update. Let's optimistically update:
-    setTables(prev => prev.map(t => t.id === updatedTable.id ? updatedTable : t))
-    setSelectedTable(updatedTable)
+    const transformed = {
+      ...updatedTable,
+      number: typeof updatedTable.number === "string" ? parseInt(updatedTable.number) || 0 : updatedTable.number
+    }
+    setTables(prev => prev.map(t => t.id === transformed.id ? transformed : t))
+    setSelectedTable(transformed)
     // Refetch in the background to sync
     fetchTables()
   }
 
-  const handleDeleteTable = async (e: React.MouseEvent, tableId: string) => {
-    e.stopPropagation() // Para evitar que se abra el modal de detalle
-    if (window.confirm("¿Estás seguro de que deseas eliminar esta mesa?")) {
-      try {
-        await apiClient.delete(`/tables/tables/${tableId}/`)
-        fetchTables()
-      } catch (error) {
-        console.error("Error al eliminar la mesa", error)
-        alert("Hubo un problema al intentar eliminar la mesa.")
-      }
-    }
-  }
-  
   // Filtrado lógico de las mesas
-  const filteredTables = tables.filter(table => 
+  const filteredTables = tables.filter(table =>
     activeFilter === "Todas" ? true : table.status === activeFilter
   )
 
@@ -108,75 +125,85 @@ export function TableMap() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
-      
-      {/* Controles: Filtros y Agregar Mesa */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/20 backdrop-blur-md p-4 rounded-3xl border border-white/40 shadow-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 px-4 py-2.5 bg-white/30 rounded-2xl border border-white/40 text-restaurante-oscuro text-sm font-semibold shadow-sm">
-            <Filter size={16} className="text-restaurante-primario" />
-            Filtros:
+
+      {/* Barra de Filtros con Estilo Glassmorphism */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white/20 backdrop-blur-md p-5 rounded-3xl border border-white/40 shadow-sm">
+        <div className="flex items-center justify-between w-full xl:w-auto">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-restaurante-primario/10 rounded-xl text-restaurante-primario">
+              <Filter size={20} />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-restaurante-oscuro">Filtrar Mesas</h2>
+              <p className="text-xs text-gray-500 font-medium">Visualiza el estado por categorías</p>
+            </div>
           </div>
-          {(["Todas", "Libre", "Ocupada", "Reservada"] as TableStatus[]).map((status) => (
-            <button
-              key={status}
-              onClick={() => setActiveFilter(status)}
-              className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-all duration-300 border ${
-                activeFilter === status
+
+          {/* Botón Crear Mesa (Móvil) */}
+          <button
+            onClick={handleCreateTable}
+            disabled={isCreating}
+            className="xl:hidden ml-4 px-4 py-2 bg-restaurante-primario text-white rounded-xl text-sm font-bold flex items-center shadow-lg"
+          >
+            <Plus size={16} className="mr-1" /> Mesa
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-between xl:justify-end">
+          <div className="flex flex-wrap gap-2">
+            {(["Todas", "Libre", "Ocupada", "Reservada"] as TableStatus[]).map((status) => (
+              <button
+                key={status}
+                onClick={() => setActiveFilter(status)}
+                className={`px-5 py-2.5 rounded-2xl text-sm font-bold transition-all duration-300 border ${activeFilter === status
                   ? "bg-restaurante-primario text-white border-transparent shadow-lg shadow-restaurante-primario/20 scale-105"
                   : "bg-white/40 border-white/60 text-restaurante-oscuro hover:bg-white/60"
-              }`}
-            >
-              {status}
-              {status !== "Todas" && (
-                <span className="ml-2 opacity-60 text-xs">
-                  ({tables.filter(t => t.status === status).length})
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-        
-        <div>
-          <TableModal onTableCreated={fetchTables} />
+                  }`}
+              >
+                {status}
+                {status !== "Todas" && (
+                  <span className="ml-2 opacity-60 text-xs">
+                    ({tables.filter(t => t.status === status).length})
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Botón Crear Mesa (Desktop) */}
+          <button
+            onClick={handleCreateTable}
+            disabled={isCreating}
+            className="hidden xl:flex ml-4 px-5 py-2.5 bg-restaurante-primario hover:bg-restaurante-oscuro text-white rounded-2xl text-sm font-bold items-center transition-all shadow-lg hover:-translate-y-1"
+          >
+            <Plus size={18} className="mr-2" /> Añadir Mesa
+          </button>
         </div>
       </div>
-          
+
       {/* Grid de Mesas */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredTables.map((table) => {
           const styles = getStatusStyles(table.status)
           const StatusIcon = styles.icon
-          
+
           return (
-            <div 
+            <div
               key={table.id}
               onClick={() => setSelectedTable(table)}
               className={`group relative flex flex-col p-6 rounded-[2.5rem] backdrop-blur-xl border-2 transition-all duration-500 cursor-pointer ${styles.bg} ${styles.border} hover:shadow-2xl hover:-translate-y-2`}
             >
-              {/* Acciones Rápidas (Editar/Eliminar) */}
-              <div className="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                <TableModal 
-                  tableToEdit={{ id: table.id, number: table.number, capacity: table.capacity }}
-                  onTableCreated={fetchTables}
-                  trigger={
-                    <button 
-                      onClick={(e) => e.stopPropagation()} 
-                      className="p-2 bg-white/80 hover:bg-white text-gray-500 hover:text-restaurante-primario rounded-full shadow-sm transition-all"
-                    >
-                      <Edit2 size={14} />
-                    </button>
-                  }
-                />
-                <button 
+              {/* Controles superiores derechos */}
+              <div className="absolute top-4 right-4 flex items-center gap-2">
+                <button
                   onClick={(e) => handleDeleteTable(e, table.id)}
-                  className="p-2 bg-white/80 hover:bg-white text-gray-500 hover:text-red-500 rounded-full shadow-sm transition-all"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-white transition-colors opacity-0 group-hover:opacity-100"
+                  title="Eliminar Mesa"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={16} />
                 </button>
+                <div className={`w-3 h-3 rounded-full animate-pulse ${styles.indicator}`} />
               </div>
-
-              {/* Indicador de Estado Flotante */}
-              <div className={`absolute top-4 right-4 w-3 h-3 rounded-full animate-pulse ${styles.indicator} group-hover:opacity-0 transition-opacity`} />
 
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
@@ -225,28 +252,32 @@ export function TableMap() {
                     </div>
                   )}
 
-                  
+
                   <div className="p-2 rounded-xl bg-white/50 text-restaurante-primario opacity-0 group-hover:opacity-100 transition-opacity">
                     <Play size={18} fill="currentColor" />
                   </div>
                 </div>
               </div>
             </div>
-          )})}
+          )
+        })}
       </div>
 
       {/* Modal de Detalle de Mesa */}
       <TableDetailModal
-        table={selectedTable} 
-        isOpen={!!selectedTable} 
-        onClose={() => setSelectedTable(null)} 
+        table={selectedTable}
+        isOpen={!!selectedTable}
+        onClose={() => setSelectedTable(null)}
         onUpdateTable={handleUpdateTable}
-        onDeleteTable={(id) => {
-          if (window.confirm("¿Estás seguro de que deseas eliminar esta mesa?")) {
-            apiClient.delete(`/tables/tables/${id}/`).then(() => {
+        onDeleteTable={async (id) => {
+          if (confirm("¿Estás seguro de que deseas eliminar esta mesa?")) {
+            try {
+              await apiClient.delete(`/tables/tables/${id}/`)
               fetchTables()
               setSelectedTable(null)
-            }).catch(e => console.error("Error al eliminar la mesa", e))
+            } catch (err) {
+              console.error(err)
+            }
           }
         }}
         onRefetch={fetchTables}
