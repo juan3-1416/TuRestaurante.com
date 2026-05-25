@@ -99,6 +99,12 @@ const [tables, setTables] = useState(INITIAL_TABLES);
 
           <Icon name="play" size={16} color={colors.primary} />
         </View>
+        <TouchableOpacity
+  style={styles.deleteBtn}
+  onPress={() => eliminarMesa(item.id)}
+>
+  <Text style={styles.deleteText}>Eliminar</Text>
+</TouchableOpacity>
       </TouchableOpacity>
     );
   };
@@ -134,6 +140,7 @@ const [tables, setTables] = useState(INITIAL_TABLES);
             >
               {f}
             </Text>
+            
           </TouchableOpacity>
         ))}
       </View>
@@ -146,6 +153,7 @@ const [tables, setTables] = useState(INITIAL_TABLES);
         numColumns={2}
         columnWrapperStyle={{ justifyContent: "space-between" }}
       />
+      
     </View>
   );
 }
