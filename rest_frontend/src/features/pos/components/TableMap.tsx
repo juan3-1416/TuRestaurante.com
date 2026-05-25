@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { TableDetailModal } from "./TableDetailModal"
-import { Receipt, Play, Filter, CheckCircle2, CalendarClock, Plus, Trash2 } from "lucide-react"
+import { Receipt, Play, Filter, CheckCircle2, CalendarClock } from "lucide-react"
 import { apiClient } from "@/lib/axios"
 
 import { Product } from "./TableProductMenu"
@@ -25,36 +25,6 @@ export function TableMap() {
   const [activeFilter, setActiveFilter] = useState<TableStatus>("Todas")
   const [selectedTable, setSelectedTable] = useState<Table | null>(null)
   const [tables, setTables] = useState<Table[]>([])
-  const [isCreating, setIsCreating] = useState(false)
-
-  const handleCreateTable = async () => {
-    setIsCreating(true)
-    try {
-      const maxNumber = tables.length > 0 ? Math.max(...tables.map(t => t.number)) : 0;
-      await apiClient.post('/tables/tables/', {
-        table_number: (maxNumber + 1).toString(),
-        capacity: 4,
-        status: 'Libre'
-      })
-      fetchTables()
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setIsCreating(false)
-    }
-  }
-
-  const handleDeleteTable = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation()
-    if (confirm("¿Estás seguro de que deseas eliminar esta mesa?")) {
-      try {
-        await apiClient.delete(`/tables/tables/${id}/`)
-        fetchTables()
-      } catch (err) {
-        console.error(err)
-      }
-    }
-  }
 
   const fetchTables = async () => {
     try {
@@ -123,30 +93,18 @@ export function TableMap() {
     <div className="space-y-8 animate-in fade-in duration-700">
       
       {/* Barra de Filtros con Estilo Glassmorphism */}
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white/20 backdrop-blur-md p-5 rounded-3xl border border-white/40 shadow-sm">
-        <div className="flex items-center justify-between w-full xl:w-auto">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-restaurante-primario/10 rounded-xl text-restaurante-primario">
-              <Filter size={20} />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-restaurante-oscuro">Filtrar Mesas</h2>
-              <p className="text-xs text-gray-500 font-medium">Visualiza el estado por categorías</p>
-            </div>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white/20 backdrop-blur-md p-5 rounded-3xl border border-white/40 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-restaurante-primario/10 rounded-xl text-restaurante-primario">
+            <Filter size={20} />
           </div>
-          
-          {/* Botón Crear Mesa (Móvil) */}
-          <button 
-            onClick={handleCreateTable}
-            disabled={isCreating}
-            className="xl:hidden ml-4 px-4 py-2 bg-restaurante-primario text-white rounded-xl text-sm font-bold flex items-center shadow-lg"
-          >
-            <Plus size={16} className="mr-1"/> Mesa
-          </button>
+          <div>
+            <h2 className="text-lg font-bold text-restaurante-oscuro">Filtrar Mesas</h2>
+            <p className="text-xs text-gray-500 font-medium">Visualiza el estado por categorías</p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto justify-between xl:justify-end">
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           {(["Todas", "Libre", "Ocupada", "Reservada"] as TableStatus[]).map((status) => (
             <button
               key={status}
@@ -165,16 +123,6 @@ export function TableMap() {
               )}
             </button>
           ))}
-          </div>
-
-          {/* Botón Crear Mesa (Desktop) */}
-          <button 
-            onClick={handleCreateTable}
-            disabled={isCreating}
-            className="hidden xl:flex ml-4 px-5 py-2.5 bg-restaurante-primario hover:bg-restaurante-oscuro text-white rounded-2xl text-sm font-bold items-center transition-all shadow-lg hover:-translate-y-1"
-          >
-            <Plus size={18} className="mr-2"/> Añadir Mesa
-          </button>
         </div>
       </div>
 
@@ -190,17 +138,8 @@ export function TableMap() {
               onClick={() => setSelectedTable(table)}
               className={`group relative flex flex-col p-6 rounded-[2.5rem] backdrop-blur-xl border-2 transition-all duration-500 cursor-pointer ${styles.bg} ${styles.border} hover:shadow-2xl hover:-translate-y-2`}
             >
-              {/* Controles superiores derechos */}
-              <div className="absolute top-4 right-4 flex items-center gap-2">
-                <button 
-                  onClick={(e) => handleDeleteTable(e, table.id)}
-                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-white transition-colors opacity-0 group-hover:opacity-100"
-                  title="Eliminar Mesa"
-                >
-                  <Trash2 size={16} />
-                </button>
-                <div className={`w-3 h-3 rounded-full animate-pulse ${styles.indicator}`} />
-              </div>
+              {/* Indicador de Estado Flotante */}
+              <div className={`absolute top-4 right-4 w-3 h-3 rounded-full animate-pulse ${styles.indicator}`} />
 
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
