@@ -25,6 +25,8 @@ import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/shared/components/LoadingButton"
 import { apiClient } from "@/lib/axios"
 
+import { usePosStore } from "@/store/posStore"
+
 // Esquema de validación para la mesa
 const formSchema = z.object({
   number: z.string().min(1, { message: "El número de mesa es requerido." }),
@@ -39,6 +41,8 @@ interface TableModalProps {
 
 export function TableModal({ onTableCreated, tableToEdit, trigger }: TableModalProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const addTable = usePosStore((state) => state.addTable)
+  const editTable = usePosStore((state) => state.editTable)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -53,19 +57,29 @@ export function TableModal({ onTableCreated, tableToEdit, trigger }: TableModalP
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       const payload = {
-        ...values,
         number: parseInt(values.number) || 1,
         capacity: parseInt(values.capacity) || 1
       }
       
-      if (tableToEdit) {
-        console.log("Actualizando mesa:", payload)
-        await apiClient.put(`/tables/tables/${tableToEdit.id}/`, payload)
-      } else {
-        console.log("Guardando nueva mesa:", payload)
-        await apiClient.post('/tables/tables/', payload)
+      try {
+        if (tableToEdit) {
+          console.log("Actualizando mesa en servidor:", payload)
+          await apiClient.put(`/tables/tables/${tableToEdit.id}/`, payload)
+        } else {
+          console.log("Guardando nueva mesa en servidor:", payload)
+          await apiClient.post('/tables/tables/', payload)
+        }
+      } catch (apiError) {
+        console.warn("Backend API offline, actualizando estado de Zustand localmente:", apiError)
       }
       
+      // Aplicar cambio local en el store global para respuesta instantánea de la UI
+      if (tableToEdit) {
+        editTable(tableToEdit.id, payload.number, payload.capacity)
+      } else {
+        addTable(payload.number, payload.capacity)
+      }
+
       setIsOpen(false)
       if (!tableToEdit) {
         form.reset()

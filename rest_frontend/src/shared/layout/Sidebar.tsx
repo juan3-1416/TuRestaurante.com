@@ -9,7 +9,8 @@ import {
   BarChart3, 
   LogOut, 
   ChevronLeft, 
-  Menu
+  Menu,
+  Wallet
 } from "lucide-react"
 import { useAuthStore } from "@/store/authStore"
 
@@ -28,6 +29,7 @@ export function Sidebar() {
   const menuItems = [
     { name: "Menú y Platillos", icon: UtensilsCrossed, path: "/dashboard" },
     { name: "Mapa de Mesas", icon: LayoutGrid, path: "/pos/mesas" },
+    { name: "Caja", icon: Wallet, path: "/caja" },
     // La ruta de reportes la dejamos visualmente desactivada por ahora (Sprint 4)
     { name: "Reportes IA", icon: BarChart3, path: "#", disabled: true },
   ]

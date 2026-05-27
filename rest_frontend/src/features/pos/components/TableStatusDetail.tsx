@@ -1,10 +1,12 @@
 import { DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Users, Clock, Receipt, CreditCard, PlusCircle, UserCheck, Coffee, Trash2, CalendarClock, X, Edit2 } from "lucide-react"
+import { Users, Clock, Receipt, PlusCircle, Coffee, Trash2, CalendarClock, X } from "lucide-react"
 import { LoadingButton } from "@/shared/components/LoadingButton"
-import { Table } from "./TableMap"
+import { Table, usePosStore } from "@/store/posStore"
 import { Product } from "./TableProductMenu"
 import { Dispatch, SetStateAction, useState } from "react"
 import { TableModal } from "./TableModal"
+import { apiClient } from "@/lib/axios"
+import { Edit2 } from "lucide-react"
 
 interface TableStatusDetailProps {
   table: Table
@@ -14,8 +16,6 @@ interface TableStatusDetailProps {
   selectedProducts: Product[]
   setSelectedProducts: Dispatch<SetStateAction<Product[]>>
   onConfirmReservation: (name: string, time: string) => void
-  onDeleteTable?: (id: string) => void
-  onRefetch?: () => void
 }
 
 export function TableStatusDetail({ 
@@ -25,16 +25,34 @@ export function TableStatusDetail({
   handleAction,
   selectedProducts,
   setSelectedProducts,
-  onConfirmReservation,
-  onDeleteTable,
-  onRefetch
+  onConfirmReservation
 }: TableStatusDetailProps) {
   
-  // Estados para el formulario de reserva
   const [isReserving, setIsReserving] = useState(false)
   const [reserveName, setReserveName] = useState("")
   const [reserveTime, setReserveTime] = useState("")
+  const deleteTable = usePosStore((state) => state.deleteTable)
 
+  const handleDeleteTable = async () => {
+    if (confirm(`¿Estás seguro de que deseas eliminar la Mesa ${table.number}?`)) {
+      try {
+        console.log("Eliminando mesa en servidor:", table.id)
+        await apiClient.delete(`/tables/tables/${table.id}/`)
+      } catch (err) {
+        console.warn("Backend API offline, eliminando de Zustand localmente:", err)
+      }
+      deleteTable(table.id)
+    }
+  }
+
+  const [prevTableId, setPrevTableId] = useState<string | null>(null)
+
+  if (table.id !== prevTableId) {
+    setPrevTableId(table.id)
+    setIsReserving(false)
+    setReserveName("")
+    setReserveTime("")
+  }
 
   const handleRemoveProduct = (cartIdToRemove: string | undefined) => {
     if (!cartIdToRemove) return;
@@ -75,22 +93,20 @@ export function TableStatusDetail({
                 Capacidad: {table.capacity} personas
               </div>
             </div>
-            
-            <div className="flex gap-2">
+                       <div className="flex items-center gap-2">
               <TableModal 
                 tableToEdit={{ id: table.id, number: table.number, capacity: table.capacity }}
-                onTableCreated={onRefetch}
                 trigger={
-                  <button className="px-4 py-1.5 rounded-full bg-white text-gray-500 hover:text-restaurante-primario hover:bg-restaurante-primario/10 border shadow-sm transition-all flex items-center gap-1.5 text-xs font-black uppercase tracking-widest">
-                    <Edit2 size={14} /> Editar
+                  <button className="px-3 py-1.5 rounded-xl bg-white/60 hover:bg-white text-gray-500 hover:text-restaurante-primario border border-gray-200/50 shadow-xs transition-all flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider">
+                    <Edit2 size={12} /> Editar
                   </button>
                 }
               />
               <button 
-                onClick={() => onDeleteTable?.(table.id)}
-                className="px-4 py-1.5 rounded-full bg-white text-gray-500 hover:text-red-500 hover:bg-red-50 border shadow-sm transition-all flex items-center gap-1.5 text-xs font-black uppercase tracking-widest"
+                onClick={handleDeleteTable}
+                className="px-3 py-1.5 rounded-xl bg-white/60 hover:bg-white text-gray-500 hover:text-red-500 border border-gray-200/50 shadow-xs transition-all flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
               >
-                <Trash2 size={14} /> Eliminar
+                <Trash2 size={12} /> Eliminar
               </button>
             </div>
           </div>
@@ -105,9 +121,9 @@ export function TableStatusDetail({
             <div className="bg-white p-5 rounded-3xl border border-gray-100 shadow-sm relative overflow-hidden">
               <div className="absolute top-0 right-0 w-16 h-16 bg-restaurante-primario/5 rounded-bl-full z-0"></div>
               <p className="text-[10px] font-black text-restaurante-primario/60 uppercase tracking-widest mb-1 relative z-10">Cliente en Mesa</p>
-              <p className="text-xl font-black text-restaurante-oscuro relative z-10">{table.customerName}</p>
+              <p className="text-xl font-black text-restaurante-oscuro relative z-10">{table.customerName || "Cliente Casual"}</p>
               <div className="flex items-center text-xs text-gray-500 mt-2 font-bold w-max px-2 py-1 rounded-md relative z-10">
-                <Clock size={12} className="mr-1 text-restaurante-primario" /> Tiempo: {table.activeTime}
+                <Clock size={12} className="mr-1 text-restaurante-primario" /> Tiempo: {table.activeTime || "0 min"}
               </div>
             </div>
 
@@ -121,7 +137,7 @@ export function TableStatusDetail({
                 </span>
               </div>
               
-              <div className="space-y-2">
+              <div className="max-h-[160px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                 {groupedOrders.length === 0 ? (
                   <p className="text-sm text-center text-gray-400 italic py-6 bg-white rounded-2xl border border-dashed border-gray-200">
                     Aún no hay productos en la orden.
@@ -148,7 +164,7 @@ export function TableStatusDetail({
               </div>
               
               <div className="pt-4 mt-2 border-t border-dashed border-gray-300 flex justify-between items-center">
-                <span className="text-sm font-black text-gray-400 uppercase tracking-widest">Total a Pagar</span>
+                <span className="text-sm font-black text-gray-400 uppercase tracking-widest">Total Acumulado</span>
                 <span className="text-3xl font-black text-restaurante-primario tracking-tighter">
                   Bs. {calculatedTotal.toFixed(2)}
                 </span>
@@ -164,14 +180,8 @@ export function TableStatusDetail({
               <Clock size={30} />
             </div>
             <div>
-              <p className="text-xs font-black text-yellow-600/60 uppercase tracking-widest mb-1">Reserva a las {table.activeTime}</p>
+              <p className="text-xs font-black text-yellow-600/60 uppercase tracking-widest mb-1">Reserva para las {table.activeTime}</p>
               <p className="text-3xl font-black text-restaurante-oscuro">{table.customerName}</p>
-            </div>
-            <div className="inline-block bg-yellow-100 px-4 py-2 rounded-xl">
-              <p className="text-xs text-yellow-700 font-bold uppercase tracking-wider flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
-                Llegada estimada
-              </p>
             </div>
           </div>
         )}
@@ -197,7 +207,6 @@ export function TableStatusDetail({
                   <CalendarClock size={22} />
                   <h3 className="font-black text-xl text-restaurante-oscuro">Datos de Reserva</h3>
                 </div>
-
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Nombre del Cliente</label>
                   <input
@@ -208,7 +217,6 @@ export function TableStatusDetail({
                     className="w-full h-12 bg-white border border-gray-200 rounded-xl px-4 text-sm font-semibold text-restaurante-oscuro focus:outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all"
                   />
                 </div>
-
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Hora Estimada</label>
                   <input
@@ -224,9 +232,9 @@ export function TableStatusDetail({
         )}
       </div>
 
+      {/* FOOTER DE BOTONES AJUSTADO */}
       <div className="p-6 bg-gray-50/80 border-t border-gray-100 shrink-0">
         <div className="w-full">
-          {/* BOTONES LIBRE NORMAL */}
           {table.status === "Libre" && !isReserving && (
             <div className="grid grid-cols-2 gap-3 w-full">
               <LoadingButton
@@ -254,7 +262,6 @@ export function TableStatusDetail({
             </div>
           )}
 
-          {/* BOTONES FORMULARIO DE RESERVA */}
           {table.status === "Libre" && isReserving && (
             <div className="flex gap-3 w-full">
               <LoadingButton 
@@ -276,45 +283,27 @@ export function TableStatusDetail({
             </div>
           )}
 
-          {/* BOTONES OCUPADA */}
           {table.status === "Ocupada" && (
-            <div className="flex gap-3 w-full">
+            <div className="w-full">
+              {/* Único botón sólido de ancho completo para la orden */}
               <LoadingButton 
-                variant="outline"
-                className="flex-1 rounded-2xl h-12 border-restaurante-primario text-restaurante-primario font-bold hover:bg-restaurante-primario/5 transition-all hover:-translate-y-1"
+                className="w-full bg-restaurante-primario hover:bg-restaurante-oscuro text-white rounded-2xl h-12 text-md font-bold shadow-lg shadow-restaurante-primario/20 transition-all hover:-translate-y-1"
                 onClick={() => handleAction("Añadiendo pedido")}
                 isLoading={isLoading && actionLoading === "Añadiendo pedido"}
               >
-                <PlusCircle className="mr-2" size={18} /> Agregar Producto
-              </LoadingButton>
-              <LoadingButton 
-                className="flex-2 bg-restaurante-primario hover:bg-restaurante-oscuro text-white rounded-2xl h-12 text-md font-bold shadow-lg shadow-restaurante-primario/20 transition-all hover:-translate-y-1 disabled:opacity-50"
-                onClick={() => handleAction("Cobrando")}
-                isLoading={isLoading && actionLoading === "Cobrando"}
-                disabled={selectedProducts.length === 0}
-              >
-                <CreditCard className="mr-2" size={20} /> Cobrar Bs. {calculatedTotal.toFixed(2)}
+                <PlusCircle className="mr-2" size={18} /> Modificar Pedido
               </LoadingButton>
             </div>
           )}
 
-          {/* BOTONES RESERVADA */}
           {table.status === "Reservada" && (
-            <div className="flex gap-3 w-full">
+            <div className="w-full">
               <LoadingButton 
-                variant="outline"
-                className="flex-1 rounded-2xl h-12 border-yellow-500 text-yellow-600 font-bold hover:bg-yellow-50 transition-all hover:-translate-y-1"
+                className="w-full bg-yellow-500 hover:bg-yellow-600 text-white rounded-2xl h-12 text-md font-bold shadow-lg shadow-yellow-500/20 transition-all hover:-translate-y-1"
                 onClick={() => handleAction("Asignando")}
                 isLoading={isLoading && actionLoading === "Asignando"}
               >
-                <UserCheck className="mr-2" size={18} /> Marcar Llegada
-              </LoadingButton>
-              <LoadingButton 
-                className="flex-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-2xl h-12 text-md font-bold shadow-lg shadow-yellow-500/20 transition-all hover:-translate-y-1"
-                onClick={() => handleAction("Tomando orden")}
-                isLoading={isLoading && actionLoading === "Tomando orden"}
-              >
-                <Receipt className="mr-2" size={18} /> Tomar Orden
+                <PlusCircle className="mr-2" size={18} /> Asignar a Mesa (Abrir)
               </LoadingButton>
             </div>
           )}
