@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -9,31 +9,78 @@ import {
 import Icon from "react-native-vector-icons/Feather";
 import { colors } from "../theme/colors";
 
-const INITIAL_TABLES = [
-  { id: "1", number: 1, capacity: 4, status: "Libre" },
-  { id: "2", number: 2, capacity: 4, status: "Ocupada", total: 150.5, cliente: "Familia Perez" },
-  { id: "3", number: 3, capacity: 2, status: "Reservada", hora: "19:30", cliente: "Juan Gomez" },
-  { id: "4", number: 4, capacity: 6, status: "Libre" },
-];
 
+// Ejemplo:
+const API_URL = "http://192.168.0.31:8000/api/tables/";
 
 export default function MesasScreen({ navigation }) {
-  const crearMesa = () => {
-  const nuevaMesa = {
-    id: Date.now().toString(),
-    number: tables.length + 1,
-    capacity: 4,
-    status: "Libre",
+  const [filter, setFilter] = useState("Todas");
+  const [tables, setTables] = useState([]);
+
+  useEffect(() => {
+    cargarMesas();
+  }, []);
+
+  const cargarMesas = async () => {
+    try {
+      const response = await fetch(API_URL);
+      const data = await response.json();
+      setTables(data);
+    } catch (error) {
+      console.log("Error al cargar mesas:", error);
+    }
   };
 
-  setTables([...tables, nuevaMesa]);
+const crearMesa = async () => {
+  try {
+    const nuevaMesa = {
+      number: String(tables.length + 1),
+      capacity: 4,
+      status: "Libre",
+      pos_x: 0,
+      pos_y: 0,
+    };
+
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(nuevaMesa),
+    });
+
+    const text = await response.text();
+
+    console.log("STATUS:", response.status);
+    console.log("RESPUESTA BACKEND:", text);
+
+    if (!response.ok) {
+      throw new Error(text);
+    }
+
+    const mesaCreada = JSON.parse(text);
+    setTables([...tables, mesaCreada]);
+  } catch (error) {
+    console.log("Error creando mesa:", error);
+  }
 };
 
-const eliminarMesa = (id) => {
-  setTables(tables.filter((mesa) => mesa.id !== id));
-};
-  const [filter, setFilter] = useState("Todas");
-const [tables, setTables] = useState(INITIAL_TABLES);
+  const eliminarMesa = async (id) => {
+    try {
+      const response = await fetch(`${API_URL}${id}/`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Error al eliminar mesa");
+      }
+
+      setTables(tables.filter((mesa) => mesa.id !== id));
+    } catch (error) {
+      console.log("Error eliminando mesa:", error);
+    }
+  };
+
   const filtered =
     filter === "Todas"
       ? tables
@@ -47,6 +94,8 @@ const [tables, setTables] = useState(INITIAL_TABLES);
         return { color: "#EF4444", icon: "dollar-sign" };
       case "Reservada":
         return { color: "#EAB308", icon: "clock" };
+      default:
+        return { color: "#6B7280", icon: "circle" };
     }
   };
 
@@ -58,10 +107,8 @@ const [tables, setTables] = useState(INITIAL_TABLES);
         style={[styles.card, { borderColor: s.color }]}
         onPress={() => navigation.navigate("Pedido", { mesa: item })}
       >
-        {/* Indicador */}
         <View style={[styles.dot, { backgroundColor: s.color }]} />
 
-        {/* Header */}
         <View style={styles.row}>
           <View style={[styles.iconBox, { backgroundColor: s.color + "20" }]}>
             <Icon name={s.icon} size={20} color={s.color} />
@@ -73,24 +120,22 @@ const [tables, setTables] = useState(INITIAL_TABLES);
           </View>
         </View>
 
-        {/* Cliente */}
-        {item.cliente ? (
+        {item.customerName ? (
           <View style={styles.clientBox}>
             <Text style={styles.clientLabel}>Cliente</Text>
-            <Text style={styles.client}>{item.cliente}</Text>
+            <Text style={styles.client}>{item.customerName}</Text>
           </View>
         ) : (
           <Text style={styles.empty}>Sin Reservar</Text>
         )}
 
-        {/* Footer */}
         <View style={styles.footer}>
           {item.status === "Ocupada" && (
-            <Text style={styles.total}>Bs. {item.total}</Text>
+            <Text style={styles.total}>Bs. {item.currentTotal}</Text>
           )}
 
           {item.status === "Reservada" && (
-            <Text style={styles.time}>{item.hora}</Text>
+            <Text style={styles.time}>{item.activeTime}</Text>
           )}
 
           {item.status === "Libre" && (
@@ -99,64 +144,52 @@ const [tables, setTables] = useState(INITIAL_TABLES);
 
           <Icon name="play" size={16} color={colors.primary} />
         </View>
+
         <TouchableOpacity
-  style={styles.deleteBtn}
-  onPress={() => eliminarMesa(item.id)}
->
-  <Text style={styles.deleteText}>Eliminar</Text>
-</TouchableOpacity>
+          style={styles.deleteBtn}
+          onPress={() => eliminarMesa(item.id)}
+        >
+          <Text style={styles.deleteText}>Eliminar</Text>
+        </TouchableOpacity>
       </TouchableOpacity>
     );
   };
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
       <View style={styles.headerRow}>
-  <Text style={styles.header}>Mapa de Mesas</Text>
+        <Text style={styles.header}>Mapa de Mesas</Text>
 
-  <TouchableOpacity style={styles.addMesaBtn} onPress={crearMesa}>
-    <Text style={styles.addMesaText}>+ Mesa</Text>
-  </TouchableOpacity>
-</View>
-      
+        <TouchableOpacity style={styles.addMesaBtn} onPress={crearMesa}>
+          <Text style={styles.addMesaText}>+ Mesa</Text>
+        </TouchableOpacity>
+      </View>
 
-      {/* FILTROS */}
       <View style={styles.filters}>
         {["Todas", "Libre", "Ocupada", "Reservada"].map((f) => (
           <TouchableOpacity
             key={f}
             onPress={() => setFilter(f)}
-            style={[
-              styles.filter,
-              filter === f && styles.activeFilter,
-            ]}
+            style={[styles.filter, filter === f && styles.activeFilter]}
           >
-            <Text
-              style={[
-                styles.filterText,
-                filter === f && { color: "#fff" },
-              ]}
-            >
+            <Text style={[styles.filterText, filter === f && { color: "#fff" }]}>
               {f}
             </Text>
-            
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* GRID */}
       <FlatList
         data={filtered}
         renderItem={renderItem}
-        keyExtractor={(i) => i.id}
+        keyExtractor={(i) => String(i.id)}
         numColumns={2}
         columnWrapperStyle={{ justifyContent: "space-between" }}
       />
-      
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -168,7 +201,25 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: "bold",
     color: "#4C1D95",
+  },
+
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 15,
+  },
+
+  addMesaBtn: {
+    backgroundColor: "#4C1D95",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+
+  addMesaText: {
+    color: "#fff",
+    fontWeight: "bold",
   },
 
   filters: {
@@ -273,36 +324,18 @@ const styles = StyleSheet.create({
     color: "#22C55E",
     fontWeight: "bold",
   },
-  headerRow: {
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginBottom: 15,
-},
 
-addMesaBtn: {
-  backgroundColor: "#4C1D95",
-  paddingHorizontal: 14,
-  paddingVertical: 8,
-  borderRadius: 12,
-},
+  deleteBtn: {
+    marginTop: 10,
+    backgroundColor: "#FEE2E2",
+    paddingVertical: 7,
+    borderRadius: 10,
+    alignItems: "center",
+  },
 
-addMesaText: {
-  color: "#fff",
-  fontWeight: "bold",
-},
-
-deleteBtn: {
-  marginTop: 10,
-  backgroundColor: "#FEE2E2",
-  paddingVertical: 7,
-  borderRadius: 10,
-  alignItems: "center",
-},
-
-deleteText: {
-  color: "#DC2626",
-  fontWeight: "bold",
-  fontSize: 12,
-},
+  deleteText: {
+    color: "#DC2626",
+    fontWeight: "bold",
+    fontSize: 12,
+  },
 });
