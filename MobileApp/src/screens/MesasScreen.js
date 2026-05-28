@@ -11,7 +11,7 @@ import { colors } from "../theme/colors";
 
 
 // Ejemplo:
-const API_URL = "http://192.168.0.31:8000/api/tables/";
+const API_URL = "http://192.168.0.6:8000/api/tables/";
 
 export default function MesasScreen({ navigation }) {
   const [filter, setFilter] = useState("Todas");
