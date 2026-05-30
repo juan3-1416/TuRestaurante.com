@@ -10,6 +10,38 @@ class TableViewSet(viewsets.ModelViewSet):
     queryset = Table.objects.all()
     serializer_class = TableSerializer
 
+    def get_queryset(self):
+        return super().get_queryset().filter(is_active=True)
+
+    def destroy(self, request, *args, **kwargs):
+        table = self.get_object()
+        table.is_active = False
+        table.status = 'Libre'
+        table.save()
+        return Response(status=204)
+
+    def create(self, request, *args, **kwargs):
+        table_number = request.data.get('table_number')
+        if not table_number:
+            return Response({'error': 'table_number is required'}, status=400)
+            
+        existing_table = Table.objects.filter(table_number=table_number).first()
+        
+        if existing_table:
+            if existing_table.is_active:
+                return Response({'error': 'La mesa ya existe.'}, status=400)
+            else:
+                # Reactivación automática
+                existing_table.is_active = True
+                capacity = request.data.get('capacity')
+                if capacity:
+                    existing_table.capacity = capacity
+                existing_table.save()
+                serializer = self.get_serializer(existing_table)
+                return Response(serializer.data, status=200)
+                
+        return super().create(request, *args, **kwargs)
+
     @action(detail=True, methods=['patch'])
     def update_status(self, request, pk=None):
         table = self.get_object()
