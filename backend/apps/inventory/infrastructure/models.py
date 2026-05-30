@@ -4,6 +4,7 @@ from django.utils.translation import gettext_lazy as _
 class Category(models.Model):
     name = models.CharField(max_length=100)
     icon = models.CharField(max_length=50, blank=True, help_text="e.g. Utensils, Drumstick")
+    is_active = models.BooleanField(default=True)
     
     class Meta:
         verbose_name = _('categoría')
@@ -15,6 +16,7 @@ class Category(models.Model):
 class Subcategory(models.Model):
     category = models.ForeignKey(Category, related_name='subcategories', on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = _('subcategoría')
@@ -31,6 +33,7 @@ class Product(models.Model):
     subcategory = models.ForeignKey(Subcategory, related_name='items', on_delete=models.CASCADE)
     name = models.CharField(max_length=150)
     price = models.DecimalField(max_digits=10, decimal_places=2)
+    is_active = models.BooleanField(default=True)
     status = models.CharField(
         max_length=20,
         choices=ProductStatus.choices,
