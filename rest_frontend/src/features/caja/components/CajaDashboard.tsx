@@ -4,13 +4,15 @@ import { useState } from "react"
 import { Wallet, ArrowDownRight, ArrowUpRight, Lock, Unlock, FileText, Receipt, Banknote, QrCode, CreditCard } from "lucide-react"
 import { LoadingButton } from "@/shared/components/LoadingButton"
 import { ExpenseModal } from "./ExpenseModal"
+import { OpenShiftModal } from "./OpenShiftModal"
+import { CloseShiftModal } from "./CloseShiftModal"
+import { ReceiptModal, ReceiptData } from "./ReceiptModal" // <-- IMPORTACIÓN NUEVA
 import { usePosStore, Table } from "@/store/posStore"
 import { useAuthStore } from "@/store/authStore"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 export function CajaDashboard() {
-  // 1. Conexión a los Stores (Cerebros globales)
-  const user = useAuthStore((state) => state.user) // Asegúrate de que exportas 'user' en tu authStore
+  const user = useAuthStore((state) => state.user) 
   const cashierName = user?.name || user?.username || "Cajero Principal"
 
   const { 
@@ -18,48 +20,63 @@ export function CajaDashboard() {
     shiftInitialBalance, 
     transactions, 
     tables, 
-    toggleShift, 
     processPayment 
   } = usePosStore()
 
-  // 2. Estados locales para los Modales de la Caja
-  const [isLoading, setIsLoading] = useState(false)
   const [selectedTableForPayment, setSelectedTableForPayment] = useState<Table | null>(null)
   const [isProcessingPayment, setIsProcessingPayment] = useState(false)
+  
+  // ESTADO NUEVO PARA EL RECIBO
+  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
 
-  // 3. Cálculos Dinámicos del Turno
   const income = transactions.filter(t => t.type === "income").reduce((acc, t) => acc + t.amount, 0)
   const expenses = transactions.filter(t => t.type === "expense").reduce((acc, t) => acc + t.amount, 0)
   const currentTotal = shiftInitialBalance + income - expenses
-
-  // 4. Filtrar Mesas que están listas para cobrar (Ocupadas con un total > 0)
   const pendingTables = tables.filter(t => t.status === "Ocupada" && (t.currentTotal || 0) > 0)
 
-  // Acciones
-  const handleToggleShift = async () => {
-    setIsLoading(true)
-    await new Promise(resolve => setTimeout(resolve, 800))
-    // Si abrimos la caja, podemos simular un fondo inicial de 500 Bs. Luego haremos el modal para esto.
-    toggleShift(!isShiftOpen, !isShiftOpen ? 500 : 0)
-    setIsLoading(false)
-  }
-
+  // LOGICA ACTUALIZADA: Generar el ticket antes de cobrar
   const handleConfirmPayment = async (method: "Efectivo" | "QR" | "Tarjeta") => {
     if (!selectedTableForPayment) return
     setIsProcessingPayment(true)
     
-    // Simulamos el tiempo de impresión del recibo y cobro
+    // 1. Preparamos los datos del recibo (Agrupamos productos repetidos)
+    const orderItems = selectedTableForPayment.orders || [];
+    const groupedOrders = orderItems.reduce((acc, product) => {
+      const existing = acc.find(item => item.name === product.name);
+      if (existing) {
+        existing.qty += 1;
+        existing.subtotal += product.price;
+      } else {
+        acc.push({ name: product.name, qty: 1, subtotal: product.price });
+      }
+      return acc;
+    }, [] as ReceiptData["items"]);
+
+    const newReceipt = {
+      tableNumber: selectedTableForPayment.number,
+      cashierName: cashierName,
+      method: method,
+      items: groupedOrders,
+      total: selectedTableForPayment.currentTotal || 0,
+      date: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+    };
+    
+    // 2. Simulamos proceso de red
     await new Promise(resolve => setTimeout(resolve, 1000))
     
+    // 3. Procesamos el pago en el estado global
     processPayment(selectedTableForPayment.id, method, cashierName)
+    
+    // 4. Cerramos modal de cobro y abrimos el recibo
     setSelectedTableForPayment(null)
     setIsProcessingPayment(false)
+    setReceiptData(newReceipt)
   }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
       
-      {/* Panel Superior: Estado de la Caja y Acciones Rápidas */}
+      {/* Panel Superior */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white/20 backdrop-blur-md p-6 rounded-3xl border border-white/40 shadow-sm">
         <div className="flex items-center gap-4">
           <div className={`p-4 rounded-2xl flex items-center justify-center transition-colors duration-500 ${
@@ -79,23 +96,11 @@ export function CajaDashboard() {
 
         <div className="flex flex-wrap gap-3 w-full md:w-auto">
           {!isShiftOpen ? (
-            <LoadingButton
-              onClick={handleToggleShift}
-              isLoading={isLoading}
-              className="flex-1 md:flex-none bg-green-500 hover:bg-green-600 text-white rounded-xl h-12 px-6 font-bold shadow-lg shadow-green-500/20 transition-all hover:-translate-y-1"
-            >
-              <Unlock className="mr-2" size={18} /> Abrir Caja
-            </LoadingButton>
+            <OpenShiftModal />
           ) : (
             <>
               <ExpenseModal cashierName={cashierName} />
-              <LoadingButton
-                onClick={handleToggleShift}
-                isLoading={isLoading}
-                className="flex-1 md:flex-none bg-restaurante-primario hover:bg-restaurante-oscuro text-white rounded-xl h-12 px-6 font-bold shadow-lg shadow-restaurante-primario/20 transition-all hover:-translate-y-1"
-              >
-                <Lock className="mr-2" size={18} /> Cerrar Turno
-              </LoadingButton>
+              <CloseShiftModal cashierName={cashierName} />
             </>
           )}
         </div>
@@ -121,7 +126,7 @@ export function CajaDashboard() {
         </div>
       </div>
 
-      {/* NUEVA SECCIÓN: Mesas Pendientes de Cobro */}
+      {/* Mesas Pendientes de Cobro */}
       {isShiftOpen && (
         <div className="bg-white/40 backdrop-blur-xl border border-white/60 rounded-[2.5rem] p-6 shadow-sm">
           <h3 className="text-lg font-bold text-restaurante-oscuro flex items-center gap-2 mb-4 px-2">
@@ -219,7 +224,7 @@ export function CajaDashboard() {
         </div>
       </div>
 
-      {/* MODAL INTEGRADO DE COBRO Y MÉTODO DE PAGO */}
+      {/* MODAL DE SELECCIÓN DE MÉTODO DE PAGO */}
       <Dialog open={!!selectedTableForPayment} onOpenChange={() => setSelectedTableForPayment(null)}>
         <DialogContent className="bg-white/90 backdrop-blur-3xl border-white/50 shadow-2xl rounded-[2.5rem] sm:max-w-[400px] p-8">
           <DialogHeader className="text-center space-y-2 mb-4">
@@ -259,6 +264,13 @@ export function CajaDashboard() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* NUEVO: MODAL DEL RECIBO TÉRMICO */}
+      <ReceiptModal 
+        isOpen={!!receiptData} 
+        onClose={() => setReceiptData(null)} 
+        data={receiptData} 
+      />
 
     </div>
   )

@@ -28,7 +28,7 @@ import { apiClient } from "@/lib/axios"
 // Esquema de validación para el nuevo platillo/variante
 const formSchema = z.object({
   name: z.string().min(3, { message: "El nombre debe tener al menos 3 caracteres." }),
-  price: z.coerce.number().min(0.1, { message: "El precio debe ser mayor a 0." }),
+  price: z.number().min(0.1, { message: "El precio debe ser mayor a 0." }),
   status: z.enum(["Disponible", "Agotado"]),
 })
 
@@ -44,8 +44,7 @@ export function VariantModal({ subcategoryId, subcategoryName, onSuccess, itemTo
   const [isOpen, setIsOpen] = useState(false)
 
   const form = useForm<z.infer<typeof formSchema>>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(formSchema) as any,
+    resolver: zodResolver(formSchema),
     defaultValues: {
       name: itemToEdit?.name || "",
       price: itemToEdit ? Number(itemToEdit.price) : 0,
@@ -150,6 +149,7 @@ export function VariantModal({ subcategoryId, subcategoryName, onSuccess, itemTo
                       disabled={isSubmitting} 
                       className="h-11 px-4 bg-white/60 border border-gray-200/70 rounded-xl text-base font-mono transition-all duration-200 focus:bg-white focus:border-restaurante-acento focus:ring-2 focus:ring-restaurante-acento/15 disabled:cursor-not-allowed disabled:opacity-60"
                       {...field} 
+                      onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
                     />
                   </FormControl>
                   <FormMessage className="text-xs text-red-600 pt-1" />
