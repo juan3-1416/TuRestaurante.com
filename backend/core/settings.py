@@ -36,6 +36,7 @@ ALLOWED_HOSTS = ["*"]
 
 # Application definition
 
+#YA DEBERIA MOSTRARSE EL CAMBIO
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
