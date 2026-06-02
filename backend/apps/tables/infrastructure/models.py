@@ -17,6 +17,7 @@ class Table(models.Model):
     # Coordenadas opcionales para la vista de Mapa de Mesas
     pos_x = models.FloatField(default=0.0, help_text="X position in the map")
     pos_y = models.FloatField(default=0.0, help_text="Y position in the map")
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = _('mesa')
