@@ -120,7 +120,7 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-white/90 backdrop-blur-3xl border-white/50 shadow-2xl rounded-[2.5rem] sm:max-w-[500px] max-h-[90vh] p-0 overflow-hidden flex flex-col">
+      <DialogContent className={`bg-white/90 backdrop-blur-3xl border-white/50 shadow-2xl rounded-[2.5rem] p-0 overflow-hidden flex flex-col transition-all duration-500 ease-in-out ${viewMode === 'products' ? 'sm:max-w-[1000px] h-[85vh]' : 'sm:max-w-[500px] max-h-[90vh]'}`}>
         <div className={`h-32 w-full absolute top-0 left-0 -z-10 opacity-30 ${
           table.status === 'Libre' ? 'bg-linear-to-b from-green-300 to-transparent' :
           table.status === 'Ocupada' ? 'bg-linear-to-b from-red-300 to-transparent' :

@@ -126,8 +126,7 @@ export function TableModal({ onTableCreated, tableToEdit, trigger }: TableModalP
                   <FormLabel className="text-sm font-semibold text-restaurante-oscuro/90">Número de Mesa</FormLabel>
                   <FormControl>
                     <Input 
-                      type="number"
-                      placeholder="Ej. 1, 2, 3..." 
+                      type="number" 
                       disabled={isSubmitting} 
                       className="h-11 px-4 bg-white/60 border border-gray-200/70 rounded-xl text-base transition-all duration-200 focus:bg-white focus:border-restaurante-acento focus:ring-2 focus:ring-restaurante-acento/15 disabled:cursor-not-allowed disabled:opacity-60"
                       {...field} 
@@ -146,8 +145,7 @@ export function TableModal({ onTableCreated, tableToEdit, trigger }: TableModalP
                   <FormLabel className="text-sm font-semibold text-restaurante-oscuro/90">Capacidad (Personas)</FormLabel>
                   <FormControl>
                     <Input 
-                      type="number"
-                      placeholder="Ej. 2, 4, 6..." 
+                      type="number" 
                       disabled={isSubmitting} 
                       className="h-11 px-4 bg-white/60 border border-gray-200/70 rounded-xl text-base transition-all duration-200 focus:bg-white focus:border-restaurante-acento focus:ring-2 focus:ring-restaurante-acento/15 disabled:cursor-not-allowed disabled:opacity-60"
                       {...field} 

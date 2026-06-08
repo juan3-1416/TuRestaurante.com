@@ -34,12 +34,12 @@ export function CajaDashboard() {
   const currentTotal = shiftInitialBalance + income - expenses
   const pendingTables = tables.filter(t => t.status === "Ocupada" && (t.currentTotal || 0) > 0)
 
-  // LOGICA ACTUALIZADA: Generar el ticket antes de cobrar
+  // Logica para generar el ticket antes de cobrar
   const handleConfirmPayment = async (method: "Efectivo" | "QR" | "Tarjeta") => {
     if (!selectedTableForPayment) return
     setIsProcessingPayment(true)
     
-    // 1. Preparamos los datos del recibo (Agrupamos productos repetidos)
+    // Preparamos los datos del recibo (Agrupamos productos repetidos)
     const orderItems = selectedTableForPayment.orders || [];
     const groupedOrders = orderItems.reduce((acc, product) => {
       const existing = acc.find(item => item.name === product.name);
@@ -61,13 +61,13 @@ export function CajaDashboard() {
       date: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
     };
     
-    // 2. Simulamos proceso de red
+    // Simulamos proceso de red
     await new Promise(resolve => setTimeout(resolve, 1000))
     
-    // 3. Procesamos el pago en el estado global
+    // Procesamos el pago en el estado global
     processPayment(selectedTableForPayment.id, method, cashierName)
     
-    // 4. Cerramos modal de cobro y abrimos el recibo
+    // Cerramos modal de cobro y abrimos el recibo
     setSelectedTableForPayment(null)
     setIsProcessingPayment(false)
     setReceiptData(newReceipt)
