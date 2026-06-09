@@ -47,7 +47,7 @@ export function LoginForm(){
 
             login(token);
             router.push("/dashboard");
-      
+            
         } catch (error) {
             console.error("Error al iniciar sesión", error)
         }

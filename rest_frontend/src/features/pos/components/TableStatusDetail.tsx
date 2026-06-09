@@ -1,20 +1,15 @@
 import { DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Users, Clock, Receipt, PlusCircle, Coffee, Trash2, CalendarClock, X } from "lucide-react"
+import { Users, Clock, Receipt, PlusCircle, Coffee, CalendarClock, X, Edit2 } from "lucide-react"
 import { LoadingButton } from "@/shared/components/LoadingButton"
-import { Table, usePosStore } from "@/store/posStore"
-import { Product } from "./TableProductMenu"
-import { Dispatch, SetStateAction, useState } from "react"
+import { Table, OrderItem } from "@/store/posStore"
+import { useState } from "react"
 import { TableModal } from "./TableModal"
-import { apiClient } from "@/lib/axios"
-import { Edit2 } from "lucide-react"
 
 interface TableStatusDetailProps {
   table: Table
   isLoading: boolean
   actionLoading: string | null
   handleAction: (actionName: string) => void
-  selectedProducts: Product[]
-  setSelectedProducts: Dispatch<SetStateAction<Product[]>>
   onConfirmReservation: (name: string, time: string) => void
 }
 
@@ -23,27 +18,12 @@ export function TableStatusDetail({
   isLoading, 
   actionLoading, 
   handleAction,
-  selectedProducts,
-  setSelectedProducts,
   onConfirmReservation
 }: TableStatusDetailProps) {
   
   const [isReserving, setIsReserving] = useState(false)
   const [reserveName, setReserveName] = useState("")
   const [reserveTime, setReserveTime] = useState("")
-  const deleteTable = usePosStore((state) => state.deleteTable)
-
-  const handleDeleteTable = async () => {
-    if (confirm(`¿Estás seguro de que deseas eliminar la Mesa ${table.number}?`)) {
-      try {
-        console.log("Eliminando mesa en servidor:", table.id)
-        await apiClient.delete(`/tables/tables/${table.id}/`)
-      } catch (err) {
-        console.warn("Backend API offline, eliminando de Zustand localmente:", err)
-      }
-      deleteTable(table.id)
-    }
-  }
 
   const [prevTableId, setPrevTableId] = useState<string | null>(null)
 
@@ -54,30 +34,21 @@ export function TableStatusDetail({
     setReserveTime("")
   }
 
-  const handleRemoveProduct = (cartIdToRemove: string | undefined) => {
-    if (!cartIdToRemove) return;
-    setSelectedProducts(selectedProducts.filter(p => p.cartId !== cartIdToRemove));
-  }
+  // 1. Calculamos el total leyendo directamente de la mesa
+  const calculatedTotal = table.currentTotal || 0;
 
-  const calculatedTotal = selectedProducts.reduce((acc, product) => acc + product.price, 0);
-
-  const groupedOrders = selectedProducts.reduce((acc, product) => {
-    const existing = acc.find(item => item.id === product.id);
-    if (existing) {
-      existing.qty += 1;
-      existing.subtotal += product.price;
-      existing.cartIds.push(product.cartId!); 
-    } else {
-      acc.push({
-        id: product.id,
-        name: product.name,
-        qty: 1,
-        subtotal: product.price,
-        cartIds: [product.cartId!]
-      });
+  // 2. Agrupamos por tickets (orderId)
+  const groupedTickets = (table.orders || []).reduce((acc, order) => {
+    const tId = order.orderId || "Orden 1"; // Para soporte de datos antiguos
+    if (!acc[tId]) {
+      acc[tId] = { id: tId, items: [], total: 0 };
     }
+    acc[tId].items.push(order);
+    acc[tId].total += order.price;
     return acc;
-  }, [] as Array<{ id: number, name: string, qty: number, subtotal: number, cartIds: string[] }>);
+  }, {} as Record<string, { id: string, items: OrderItem[], total: number }>);
+  
+  const tickets = Object.values(groupedTickets);
 
   return (
     <>
@@ -93,7 +64,7 @@ export function TableStatusDetail({
                 Capacidad: {table.capacity} personas
               </div>
             </div>
-                       <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <TableModal 
                 tableToEdit={{ id: table.id, number: table.number, capacity: table.capacity }}
                 trigger={
@@ -102,12 +73,6 @@ export function TableStatusDetail({
                   </button>
                 }
               />
-              <button 
-                onClick={handleDeleteTable}
-                className="px-3 py-1.5 rounded-xl bg-white/60 hover:bg-white text-gray-500 hover:text-red-500 border border-gray-200/50 shadow-xs transition-all flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider"
-              >
-                <Trash2 size={12} /> Eliminar
-              </button>
             </div>
           </div>
         </DialogHeader>
@@ -128,40 +93,54 @@ export function TableStatusDetail({
             </div>
 
             <div className="space-y-3 bg-gray-50/50 p-5 rounded-3xl border border-gray-100">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center mb-4">
                 <h4 className="text-sm font-bold text-gray-400 flex items-center gap-2 uppercase tracking-wider">
-                  <Receipt size={16} className="text-restaurante-primario" /> Detalle del Pedido
+                  <Receipt size={16} className="text-restaurante-primario" /> Detalle de Órdenes Confirmadas
                 </h4>
                 <span className="text-xs font-bold text-gray-400 bg-white px-2 py-1 rounded-md border border-gray-100">
-                  {selectedProducts.length} items
+                  {tickets.length} pedido(s)
                 </span>
               </div>
               
-              <div className="max-h-[160px] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                {groupedOrders.length === 0 ? (
-                  <p className="text-sm text-center text-gray-400 italic py-6 bg-white rounded-2xl border border-dashed border-gray-200">
-                    Aún no hay productos en la orden.
-                  </p>
-                ) : (
-                  groupedOrders.map(order => (
-                    <div key={order.id} className="flex justify-between items-center p-3 bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
-                      <div className="text-sm flex items-center gap-2">
-                        <span className="font-black bg-restaurante-primario/10 text-restaurante-primario w-6 h-6 flex items-center justify-center rounded-lg">{order.qty}</span>
-                        <span className="font-semibold text-restaurante-oscuro">{order.name}</span>
+              {/* Contenedor vertical para tickets independientes sin scroll interno */}
+              {tickets.length === 0 ? (
+                <p className="text-sm text-center text-gray-400 italic py-6 bg-white rounded-2xl border border-dashed border-gray-200">
+                  Aún no hay productos confirmados en la mesa.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-5 pb-4">
+                  {tickets.map((ticket, tIdx) => (
+                    <div key={ticket.id} className="w-full bg-white rounded-3xl border border-gray-200 shadow-sm p-5 flex flex-col relative">
+                      <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
+                         <span className="font-black text-lg text-gray-700">Pedido {tIdx + 1}</span>
+                         <button 
+                           onClick={() => handleAction(`Modificar Pedido:${ticket.id}`)}
+                           className="text-sm flex items-center gap-1.5 text-restaurante-primario hover:text-restaurante-oscuro bg-restaurante-primario/10 hover:bg-restaurante-primario/20 px-3 py-1.5 rounded-xl font-bold transition-colors"
+                         >
+                           <Edit2 size={14} /> Modificar
+                         </button>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono font-bold text-gray-600">Bs. {order.subtotal.toFixed(2)}</span>
-                        <button 
-                          onClick={() => handleRemoveProduct(order.cartIds[0])}
-                          className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity bg-red-50 p-1.5 rounded-lg"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                      
+                      <div className="space-y-3 mb-4">
+                        {ticket.items.map((order, idx) => (
+                          <div key={`${order.cartId || order.productId}-${idx}`} className="flex justify-between items-start text-sm border-b border-dashed border-gray-100 pb-3 mb-3 last:border-0 last:pb-0 last:mb-0">
+                            <div className="flex items-start gap-3">
+                              <span className="font-black bg-restaurante-primario/10 text-restaurante-primario w-7 h-7 flex items-center justify-center rounded-lg">1</span>
+                              <span className="font-semibold text-gray-600 leading-tight pt-1 text-base">{order.name}</span>
+                            </div>
+                            <span className="font-mono font-bold text-gray-500 whitespace-nowrap pt-1 text-base">Bs. {order.price.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="mt-auto pt-4 border-t border-gray-100 flex justify-between items-center bg-gray-50/80 -mx-5 -mb-5 px-5 py-4 rounded-b-3xl">
+                        <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Subtotal Pedido {tIdx + 1}</span>
+                        <span className="font-black text-2xl text-restaurante-oscuro">Bs. {ticket.total.toFixed(2)}</span>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
               
               <div className="pt-4 mt-2 border-t border-dashed border-gray-300 flex justify-between items-center">
                 <span className="text-sm font-black text-gray-400 uppercase tracking-widest">Total Acumulado</span>
@@ -211,7 +190,6 @@ export function TableStatusDetail({
                   <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">Nombre del Cliente</label>
                   <input
                     type="text"
-                    placeholder="Ej. Juan Pérez"
                     value={reserveName}
                     onChange={(e) => setReserveName(e.target.value)}
                     className="w-full h-12 bg-white border border-gray-200 rounded-xl px-4 text-sm font-semibold text-restaurante-oscuro focus:outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 transition-all"
@@ -284,14 +262,13 @@ export function TableStatusDetail({
           )}
 
           {table.status === "Ocupada" && (
-            <div className="w-full">
-              {/* Único botón sólido de ancho completo para la orden */}
+            <div className="flex w-full">
               <LoadingButton 
                 className="w-full bg-restaurante-primario hover:bg-restaurante-oscuro text-white rounded-2xl h-12 text-md font-bold shadow-lg shadow-restaurante-primario/20 transition-all hover:-translate-y-1"
-                onClick={() => handleAction("Añadiendo pedido")}
-                isLoading={isLoading && actionLoading === "Añadiendo pedido"}
+                onClick={() => handleAction("Agregar Nueva Orden")}
+                isLoading={isLoading && actionLoading === "Agregar Nueva Orden"}
               >
-                <PlusCircle className="mr-2" size={18} /> Modificar Pedido
+                <PlusCircle className="mr-2" size={18} /> Agregar Pedido
               </LoadingButton>
             </div>
           )}

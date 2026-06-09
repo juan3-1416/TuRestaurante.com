@@ -5,6 +5,7 @@ export type TableStatus = "Libre" | "Ocupada" | "Reservada"
 
 export interface OrderItem {
   cartId: string;
+  orderId?: string;
   productId: number | string;
   name: string;
   price: number;

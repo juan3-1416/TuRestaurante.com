@@ -58,7 +58,6 @@ export function TableMap() {
           </div>
           <div>
             <h2 className="text-lg font-bold text-restaurante-oscuro">Filtrar Mesas</h2>
-            <p className="text-xs text-gray-500 font-medium">Visualiza el estado por categorías</p>
           </div>
         </div>
 

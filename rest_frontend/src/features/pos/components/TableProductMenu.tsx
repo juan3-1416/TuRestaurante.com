@@ -1,5 +1,5 @@
 import { DialogTitle } from "@/components/ui/dialog"
-import { ArrowLeft, ShoppingCart, Plus, Minus, Trash2, Tag } from "lucide-react"
+import { ArrowLeft, ShoppingCart, Plus, Minus, Trash2, Tag, Utensils, Edit } from "lucide-react"
 import { LoadingButton } from "@/shared/components/LoadingButton"
 import { Dispatch, SetStateAction, useEffect, useState, useMemo } from "react"
 import { apiClient } from "@/lib/axios"
@@ -115,7 +115,6 @@ export function TableProductMenu({
           <DialogTitle className="text-2xl font-black text-restaurante-oscuro tracking-tighter">
             Menú y Orden
           </DialogTitle>
-          <p className="text-sm text-gray-500 font-medium">Agrega productos a la orden de la mesa</p>
         </div>
       </div>
 
@@ -257,14 +256,25 @@ export function TableProductMenu({
                 Bs. {selectedProducts.reduce((acc, p) => acc + p.price, 0).toFixed(2)}
               </span>
             </div>
-            <LoadingButton 
-              className="w-full bg-linear-to-r from-restaurante-primario to-restaurante-acento hover:from-restaurante-oscuro hover:to-restaurante-primario text-white rounded-xl h-14 text-lg font-bold shadow-lg shadow-restaurante-primario/25 transition-all hover:-translate-y-1 disabled:opacity-50 disabled:hover:translate-y-0"
-              onClick={() => handleAction("Confirmar Pedido")}
-              isLoading={isLoading && actionLoading === "Confirmar Pedido"}
-              disabled={selectedProducts.length === 0}
-            >
-              Confirmar Orden
-            </LoadingButton>
+            <div className="flex flex-col gap-3">
+              <LoadingButton 
+                className="w-full bg-linear-to-r from-restaurante-primario to-restaurante-acento hover:from-restaurante-oscuro hover:to-restaurante-primario text-white rounded-xl h-12 text-md font-bold shadow-lg shadow-restaurante-primario/25 transition-all hover:-translate-y-1 disabled:opacity-50 disabled:hover:translate-y-0"
+                onClick={() => handleAction("Enviar a Cocina")}
+                isLoading={isLoading && actionLoading === "Enviar a Cocina"}
+                disabled={selectedProducts.length === 0}
+              >
+                <Utensils className="mr-2" size={18} /> Enviar a Cocina
+              </LoadingButton>
+              <LoadingButton 
+                variant="outline"
+                className="w-full border-gray-300 text-gray-700 hover:bg-gray-50 rounded-xl h-12 text-md font-bold transition-all disabled:opacity-50"
+                onClick={() => handleAction("Solo Modificar")}
+                isLoading={isLoading && actionLoading === "Solo Modificar"}
+                disabled={selectedProducts.length === 0}
+              >
+                <Edit className="mr-2" size={18} /> Solo Modificar
+              </LoadingButton>
+            </div>
           </div>
         </div>
       </div>
