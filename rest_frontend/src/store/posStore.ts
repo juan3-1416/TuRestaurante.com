@@ -5,6 +5,7 @@ export type TableStatus = "Libre" | "Ocupada" | "Reservada"
 
 export interface OrderItem {
   cartId: string;
+  orderId?: string;
   productId: number | string;
   name: string;
   price: number;
@@ -105,12 +106,12 @@ export const usePosStore = create<PosState>((set, get) => ({
     transactions: isOpen ? [] : [] // Opcional: Limpiar transacciones al cerrar turno
   })),
 
-  // MAGIA: Esta función cobra la mesa, la libera y registra el ingreso en la caja
+  // Esta función cobra la mesa, la libera y registra el ingreso en la caja
   processPayment: (tableId, method, cashierName) => {
     const table = get().tables.find(t => t.id === tableId)
     if (!table || table.status !== "Ocupada" || !table.currentTotal) return
 
-    // 1. Registramos el ingreso
+    // Registramos el ingreso
     get().addTransaction({
       type: "income",
       description: `Cobro Mesa ${table.number} (${table.customerName || 'Cliente'})`,
@@ -120,7 +121,7 @@ export const usePosStore = create<PosState>((set, get) => ({
       cashierName: cashierName
     })
 
-    // 2. Liberamos la mesa
+    // Liberamos la mesa
     get().updateTable({
       ...table,
       status: "Libre",
