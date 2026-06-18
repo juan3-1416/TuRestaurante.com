@@ -1,15 +1,19 @@
 "use client"
 
 import { useState } from "react"
-import { Wallet, ArrowDownRight, ArrowUpRight, Lock, Unlock, FileText, Receipt, Banknote, QrCode, CreditCard } from "lucide-react"
+import { Wallet, ArrowDownRight, ArrowUpRight, Lock, Unlock, FileText, Receipt, Banknote, QrCode, CreditCard, DollarSign } from "lucide-react"
 import { LoadingButton } from "@/shared/components/LoadingButton"
 import { ExpenseModal } from "./ExpenseModal"
 import { OpenShiftModal } from "./OpenShiftModal"
 import { CloseShiftModal } from "./CloseShiftModal"
-import { ReceiptModal, ReceiptData } from "./ReceiptModal" // <-- IMPORTACIÓN NUEVA
+import { ReceiptModal, ReceiptData } from "./ReceiptModal"
 import { usePosStore, Table } from "@/store/posStore"
 import { useAuthStore } from "@/store/authStore"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+
+const EXCHANGE_RATE = 6.96; // Tasa de cambio oficial en Bolivia
 
 export function CajaDashboard() {
   const user = useAuthStore((state) => state.user) 
@@ -23,23 +27,49 @@ export function CajaDashboard() {
     processPayment 
   } = usePosStore()
 
+  // Estados del Modal Principal y Recibo
   const [selectedTableForPayment, setSelectedTableForPayment] = useState<Table | null>(null)
   const [isProcessingPayment, setIsProcessingPayment] = useState(false)
-  
-  // ESTADO NUEVO PARA EL RECIBO
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
 
+  // Estados interactivos para el Modal de Cobro
+  const [paymentMethod, setPaymentMethod] = useState<"Efectivo" | "QR" | "Tarjeta">("Efectivo")
+  const [paymentCurrency, setPaymentCurrency] = useState<"Bs" | "USD">("Bs")
+  const [amountReceived, setAmountReceived] = useState<number | "">("")
+
+  // Cálculos Financieros Generales
   const income = transactions.filter(t => t.type === "income").reduce((acc, t) => acc + t.amount, 0)
   const expenses = transactions.filter(t => t.type === "expense").reduce((acc, t) => acc + t.amount, 0)
   const currentTotal = shiftInitialBalance + income - expenses
   const pendingTables = tables.filter(t => t.status === "Ocupada" && (t.currentTotal || 0) > 0)
 
-  // Logica para generar el ticket antes de cobrar
-  const handleConfirmPayment = async (method: "Efectivo" | "QR" | "Tarjeta") => {
+  // Cálculos Específicos del Modal de Cobro
+  const tableTotalBs = selectedTableForPayment?.currentTotal || 0;
+  const tableTotalUSD = tableTotalBs / EXCHANGE_RATE;
+  
+  const changeBs = paymentMethod === "Efectivo" 
+    ? (paymentCurrency === "Bs" 
+        ? (Number(amountReceived) || 0) - tableTotalBs 
+        : ((Number(amountReceived) || 0) * EXCHANGE_RATE) - tableTotalBs)
+    : 0;
+
+  const handleOpenPaymentModal = (table: Table) => {
+    setSelectedTableForPayment(table);
+    setPaymentMethod("Efectivo");
+    setPaymentCurrency("Bs");
+    setAmountReceived("");
+  }
+
+  const handleConfirmPayment = async () => {
     if (!selectedTableForPayment) return
+    
+    if (paymentMethod === "Efectivo" && changeBs < 0) {
+      alert("El monto recibido es menor al total a pagar.");
+      return;
+    }
+
     setIsProcessingPayment(true)
     
-    // Preparamos los datos del recibo (Agrupamos productos repetidos)
     const orderItems = selectedTableForPayment.orders || [];
     const groupedOrders = orderItems.reduce((acc, product) => {
       const existing = acc.find(item => item.name === product.name);
@@ -55,19 +85,25 @@ export function CajaDashboard() {
     const newReceipt = {
       tableNumber: selectedTableForPayment.number,
       cashierName: cashierName,
-      method: method,
+      method: paymentMethod,
       items: groupedOrders,
-      total: selectedTableForPayment.currentTotal || 0,
+      total: tableTotalBs,
       date: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
     };
     
-    // Simulamos proceso de red
     await new Promise(resolve => setTimeout(resolve, 1000))
     
-    // Procesamos el pago en el estado global
-    processPayment(selectedTableForPayment.id, method, cashierName)
+    // Guardamos incluyendo la información de la moneda y el vuelto
+    processPayment(
+      selectedTableForPayment.id, 
+      paymentMethod, 
+      cashierName,
+      paymentCurrency,
+      Number(amountReceived) || 0,
+      changeBs,
+      EXCHANGE_RATE
+    )
     
-    // Cerramos modal de cobro y abrimos el recibo
     setSelectedTableForPayment(null)
     setIsProcessingPayment(false)
     setReceiptData(newReceipt)
@@ -106,23 +142,35 @@ export function CajaDashboard() {
         </div>
       </div>
 
-      {/* Tarjetas de Resumen Financiero Dinámicas */}
+      {/* Tarjetas de Resumen Financiero Dinámicas (Actualizadas con USD) */}
       <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 transition-all duration-500 ${isShiftOpen ? 'opacity-100 translate-y-0' : 'opacity-50 translate-y-2 pointer-events-none'}`}>
         <div className="p-6 rounded-[2rem] bg-white/40 backdrop-blur-md border border-white/60 shadow-sm relative overflow-hidden group">
           <p className="text-xs font-bold text-gray-500 uppercase tracking-widest relative z-10">Fondo Inicial</p>
-          <p className="text-2xl font-black text-restaurante-oscuro mt-1 relative z-10">Bs. {isShiftOpen ? shiftInitialBalance.toFixed(2) : "0.00"}</p>
+          <div className="flex items-end gap-2 mt-1 relative z-10">
+            <p className="text-2xl font-black text-restaurante-oscuro">Bs. {isShiftOpen ? shiftInitialBalance.toFixed(2) : "0.00"}</p>
+            {isShiftOpen && <span className="text-sm font-bold text-gray-400 mb-1">(${(shiftInitialBalance / EXCHANGE_RATE).toFixed(2)})</span>}
+          </div>
         </div>
         <div className="p-6 rounded-[2rem] bg-green-50/50 backdrop-blur-md border border-green-200/50 shadow-sm relative overflow-hidden group">
           <p className="text-xs font-bold text-green-600 uppercase tracking-widest relative z-10 flex items-center gap-1"><ArrowUpRight size={14}/> Ingresos</p>
-          <p className="text-2xl font-black text-green-700 mt-1 relative z-10">Bs. {isShiftOpen ? income.toFixed(2) : "0.00"}</p>
+          <div className="flex items-end gap-2 mt-1 relative z-10">
+            <p className="text-2xl font-black text-green-700">Bs. {isShiftOpen ? income.toFixed(2) : "0.00"}</p>
+            {isShiftOpen && <span className="text-sm font-bold text-green-600/60 mb-1">(${(income / EXCHANGE_RATE).toFixed(2)})</span>}
+          </div>
         </div>
         <div className="p-6 rounded-[2rem] bg-red-50/50 backdrop-blur-md border border-red-200/50 shadow-sm relative overflow-hidden group">
           <p className="text-xs font-bold text-red-600 uppercase tracking-widest relative z-10 flex items-center gap-1"><ArrowDownRight size={14}/> Gastos</p>
-          <p className="text-2xl font-black text-red-700 mt-1 relative z-10">Bs. {isShiftOpen ? expenses.toFixed(2) : "0.00"}</p>
+          <div className="flex items-end gap-2 mt-1 relative z-10">
+            <p className="text-2xl font-black text-red-700">Bs. {isShiftOpen ? expenses.toFixed(2) : "0.00"}</p>
+            {isShiftOpen && <span className="text-sm font-bold text-red-600/60 mb-1">(${(expenses / EXCHANGE_RATE).toFixed(2)})</span>}
+          </div>
         </div>
         <div className="p-6 rounded-[2rem] bg-restaurante-primario/5 backdrop-blur-md border border-restaurante-primario/20 shadow-sm relative overflow-hidden group">
           <p className="text-xs font-bold text-restaurante-primario uppercase tracking-widest relative z-10 flex items-center gap-1"><Wallet size={14}/> Saldo Total</p>
-          <p className="text-3xl font-black text-restaurante-primario tracking-tighter mt-1 relative z-10">Bs. {isShiftOpen ? currentTotal.toFixed(2) : "0.00"}</p>
+          <div className="flex items-end gap-2 mt-1 relative z-10">
+            <p className="text-3xl font-black text-restaurante-primario tracking-tighter">Bs. {isShiftOpen ? currentTotal.toFixed(2) : "0.00"}</p>
+            {isShiftOpen && <span className="text-sm font-bold text-restaurante-primario/60 mb-1.5">(${(currentTotal / EXCHANGE_RATE).toFixed(2)})</span>}
+          </div>
         </div>
       </div>
 
@@ -149,7 +197,7 @@ export function CajaDashboard() {
                     <p className="text-sm font-bold text-restaurante-primario">Bs. {table.currentTotal?.toFixed(2)}</p>
                   </div>
                   <button 
-                    onClick={() => setSelectedTableForPayment(table)}
+                    onClick={() => handleOpenPaymentModal(table)}
                     className="bg-restaurante-primario/10 text-restaurante-primario hover:bg-restaurante-primario hover:text-white p-3 rounded-2xl transition-colors"
                   >
                     <Receipt size={20} />
@@ -178,8 +226,8 @@ export function CajaDashboard() {
               <tr className="border-b border-gray-200/50">
                 <th className="px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Hora</th>
                 <th className="px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Descripción</th>
-                <th className="px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Cajero</th>
                 <th className="px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Método</th>
+                <th className="px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Moneda</th>
                 <th className="px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest text-right">Monto</th>
               </tr>
             </thead>
@@ -201,7 +249,6 @@ export function CajaDashboard() {
                   <tr key={tx.id} className="border-b border-white/40 hover:bg-white/50 transition-colors group">
                     <td className="px-4 py-4 text-sm font-semibold text-gray-500">{tx.time}</td>
                     <td className="px-4 py-4 text-sm font-bold text-restaurante-oscuro">{tx.description}</td>
-                    <td className="px-4 py-4 text-sm font-medium text-gray-500">{tx.cashierName}</td>
                     <td className="px-4 py-4 text-sm">
                       <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider ${
                         tx.method === 'Efectivo' ? 'bg-green-100 text-green-700' :
@@ -210,6 +257,11 @@ export function CajaDashboard() {
                       }`}>
                         {tx.method}
                       </span>
+                    </td>
+                    <td className="px-4 py-4 text-sm font-bold text-gray-500">
+                      {tx.currency === "USD" ? (
+                        <span className="flex items-center gap-1 text-green-600"><DollarSign size={14}/> USD</span>
+                      ) : "Bs."}
                     </td>
                     <td className={`px-4 py-4 text-right font-mono font-bold text-base ${
                       tx.type === 'income' ? 'text-green-600' : 'text-red-500'
@@ -224,54 +276,128 @@ export function CajaDashboard() {
         </div>
       </div>
 
-      {/* MODAL DE SELECCIÓN DE MÉTODO DE PAGO */}
+      {/* MODAL DE COBRO AVANZADO MAS CALCULO DE CAMBIO*/}
       <Dialog open={!!selectedTableForPayment} onOpenChange={() => setSelectedTableForPayment(null)}>
-        <DialogContent className="bg-white/90 backdrop-blur-3xl border-white/50 shadow-2xl rounded-[2.5rem] sm:max-w-[400px] p-8">
-          <DialogHeader className="text-center space-y-2 mb-4">
-            <DialogTitle className="text-2xl font-black text-restaurante-oscuro">Procesar Pago</DialogTitle>
-            <p className="text-sm font-bold text-gray-500">Mesa {selectedTableForPayment?.number} • Total a pagar:</p>
-            <p className="text-5xl font-black text-restaurante-primario tracking-tighter py-2">
-              Bs. {selectedTableForPayment?.currentTotal?.toFixed(2)}
-            </p>
+        <DialogContent className="bg-white/90 backdrop-blur-3xl border-white/50 shadow-2xl rounded-[2.5rem] sm:max-w-[550px] max-h-[95vh] overflow-hidden p-6">
+          
+          <DialogHeader className="text-center space-y-1 mb-2 border-b border-gray-200 pb-2">
+            <DialogTitle className="text-xl font-black text-restaurante-oscuro">Procesar Pago</DialogTitle>
+            <p className="text-sm font-bold text-gray-500">Cobro a Mesa {selectedTableForPayment?.number}</p>
           </DialogHeader>
 
-          <div className="space-y-3">
-            <p className="text-xs font-bold text-gray-400 uppercase tracking-widest text-center mb-4">Seleccione Método de Pago</p>
-            
-            <LoadingButton 
-              className="w-full h-14 bg-green-50 hover:bg-green-100 border border-green-200 text-green-700 rounded-2xl text-lg font-bold transition-all shadow-sm flex items-center justify-center gap-3"
-              onClick={() => handleConfirmPayment("Efectivo")}
-              isLoading={isProcessingPayment}
-            >
-              <Banknote size={24} /> Efectivo
-            </LoadingButton>
+          <div className="space-y-4">
+            {/* Resumen a Pagar */}
+            <div className="bg-restaurante-primario/5 py-2 px-4 rounded-2xl border border-restaurante-primario/20 flex flex-col items-center justify-center">
+              <span className="text-xs font-bold text-restaurante-primario uppercase tracking-widest">Total a Pagar</span>
+              <div className="flex items-end gap-3 mt-0">
+                <span className="text-3xl font-black text-restaurante-primario tracking-tighter">
+                  Bs. {tableTotalBs.toFixed(2)}
+                </span>
+                <span className="text-base font-bold text-restaurante-primario/60 mb-1">
+                  (${tableTotalUSD.toFixed(2)})
+                </span>
+              </div>
+            </div>
 
-            <LoadingButton 
-              className="w-full h-14 bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 rounded-2xl text-lg font-bold transition-all shadow-sm flex items-center justify-center gap-3"
-              onClick={() => handleConfirmPayment("QR")}
-              isLoading={isProcessingPayment}
-            >
-              <QrCode size={24} /> Transferencia QR
-            </LoadingButton>
+            {/* Selección de Método */}
+            <div className="space-y-1.5">
+              <Label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">1. Método de Pago</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {(["Efectivo", "QR", "Tarjeta"] as const).map((method) => (
+                  <button
+                    key={method}
+                    onClick={() => setPaymentMethod(method)}
+                    className={`py-2 flex flex-col items-center justify-center gap-1.5 rounded-xl text-xs font-bold transition-all border ${
+                      paymentMethod === method
+                        ? "bg-restaurante-primario text-white border-restaurante-primario shadow-md"
+                        : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                    }`}
+                  >
+                    {method === "Efectivo" && <Banknote size={18} />}
+                    {method === "QR" && <QrCode size={18} />}
+                    {method === "Tarjeta" && <CreditCard size={18} />}
+                    {method}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-            <LoadingButton 
-              className="w-full h-14 bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-700 rounded-2xl text-lg font-bold transition-all shadow-sm flex items-center justify-center gap-3"
-              onClick={() => handleConfirmPayment("Tarjeta")}
-              isLoading={isProcessingPayment}
-            >
-              <CreditCard size={24} /> Tarjeta / POS
-            </LoadingButton>
+            {/* Calculadora de Vuelto (Solo si es Efectivo) */}
+            {paymentMethod === "Efectivo" && (
+              <div className="space-y-3 animate-in slide-in-from-top-2">
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Selector de Moneda */}
+                  <div className="space-y-1.5 flex flex-col justify-end">
+                    <Label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center justify-between">
+                      <span>2. Moneda</span>
+                      {paymentCurrency === "USD" && (
+                        <span className="text-[9px] text-green-600 normal-case">(1 USD = {EXCHANGE_RATE} Bs)</span>
+                      )}
+                    </Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setPaymentCurrency("Bs")}
+                        className={`py-1.5 rounded-xl text-sm font-bold transition-all border ${paymentCurrency === "Bs" ? "bg-gray-800 text-white border-gray-800 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}
+                      >
+                        Bs
+                      </button>
+                      <button
+                        onClick={() => setPaymentCurrency("USD")}
+                        className={`py-1.5 rounded-xl text-sm font-bold transition-all border ${paymentCurrency === "USD" ? "bg-green-600 text-white border-green-600 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}
+                      >
+                        USD
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Input de Monto Recibido */}
+                  <div className="space-y-1.5 relative">
+                    <Label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">3. Monto Entregado</Label>
+                    <div className="relative">
+                      <span className={`absolute left-3 top-1/2 -translate-y-1/2 font-black ${paymentCurrency === "USD" ? "text-green-600" : "text-gray-400"}`}>
+                        {paymentCurrency === "USD" ? "$" : "Bs."}
+                      </span>
+                      <Input 
+                        type="number" 
+                        className={`h-[36px] pl-9 pr-3 bg-gray-50 border-2 rounded-xl text-lg font-black transition-all ${paymentCurrency === "USD" ? "focus:border-green-500 focus:ring-green-500/20" : "focus:border-gray-800 focus:ring-gray-800/20"}`}
+                        value={amountReceived}
+                        onChange={(e) => setAmountReceived(e.target.valueAsNumber || "")}
+                        onFocus={(e) => e.target.select()}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Resultado del Cambio (Vuelto) */}
+                <div className={`p-3 rounded-xl border flex justify-between items-center transition-all ${
+                  changeBs < 0 ? "bg-red-50 border-red-200" : "bg-gray-800 border-gray-800 text-white"}`}>
+                  <span className={`text-xs font-bold uppercase tracking-widest ${changeBs < 0 ? "text-red-500" : "text-gray-300"}`}>
+                    Cambio (Vuelto)
+                  </span>
+                  <span className={`text-xl font-black font-mono ${changeBs < 0 ? "text-red-600" : "text-white"}`}>
+                    {changeBs < 0 ? "Falta dinero" : `Bs. ${changeBs.toFixed(2)}`}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Botón Final */}
+            <div className="pt-0">
+              <LoadingButton 
+                onClick={handleConfirmPayment}
+                isLoading={isProcessingPayment}
+                loadingText="Procesando..."
+                disabled={paymentMethod === "Efectivo" && changeBs < 0}
+                className="w-full h-12 bg-restaurante-primario hover:bg-restaurante-oscuro text-white rounded-xl text-base font-bold transition-all shadow-lg shadow-restaurante-primario/25 disabled:opacity-50">
+                Confirmar Pago
+              </LoadingButton>
+            </div>
+
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* NUEVO: MODAL DEL RECIBO TÉRMICO */}
-      <ReceiptModal 
-        isOpen={!!receiptData} 
-        onClose={() => setReceiptData(null)} 
-        data={receiptData} 
-      />
-
+      <ReceiptModal isOpen={!!receiptData} onClose={() => setReceiptData(null)} data={receiptData} />
     </div>
   )
 }

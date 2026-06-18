@@ -1,11 +1,16 @@
 import { create } from 'zustand';
 
-// Definimos la estructura del usuario
+// Definimos los roles permitidos
+export type Role = "Admin" | "Cajero" | "Mesero";
+
+// Estructura de los usuarios
 export interface User {
   id?: number | string;
   username: string;
   name?: string;
-  email?: string;
+  address?: string; //direccion
+  accountNumber?: string;
+  role?: Role;
 }
 
 // Son los tipos que se van a pasar para typescript
@@ -35,7 +40,12 @@ export const useAuthStore = create<AuthState>((set) => ({
   // Función para iniciar sesión
   login: (token: string, user?: User) => {
     localStorage.setItem('jwt_token', token);
-    const userInfo = user || { username: "cajero", name: "Cajero Principal" };
+    // Si no se pasa usuario en el login simulado, asignamos uno por defecto tipo Admin para pruebas
+    const userInfo: User = user || { 
+      username: "admin", 
+      name: "Administrador Principal", 
+      role: "Admin" 
+    };
     localStorage.setItem('user_info', JSON.stringify(userInfo));
     set({ token, isAuthenticated: true, user: userInfo });
   },

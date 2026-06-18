@@ -4,10 +4,10 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { Unlock } from "lucide-react"
+import { Unlock, Wallet, Coins } from "lucide-react"
 
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
+  Dialog, DialogContent, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
@@ -26,7 +26,7 @@ export function OpenShiftModal() {
     resolver: zodResolver(openShiftSchema),
     defaultValues: { initialBalance: 0 },
   })
-
+  
   const { isSubmitting } = form.formState
 
   async function onSubmit(values: z.infer<typeof openShiftSchema>) {
@@ -52,54 +52,67 @@ export function OpenShiftModal() {
           <Unlock className="mr-2" size={18} /> Abrir Caja
         </LoadingButton>
       </DialogTrigger>
-
-      <DialogContent className="bg-white/90 backdrop-blur-xl border border-white/40 shadow-2xl rounded-3xl sm:max-w-[400px] p-7">
-        <DialogHeader className="border-b border-gray-100 pb-4 mb-4">
-          <DialogTitle className="text-2xl font-black text-restaurante-oscuro tracking-tight flex items-center gap-2">
-            <div className="p-2 rounded-xl bg-green-500/10 text-green-600">
-              <Unlock size={20} />
-            </div>
+      
+      <DialogContent className="bg-white/90 backdrop-blur-2xl border-white/60 shadow-2xl rounded-[2rem] sm:max-w-[420px] p-0 overflow-hidden">
+        
+        {/* Header con diseño premium y Glassmorphism */}
+        <div className="bg-linear-to-br from-green-500/10 to-green-600/5 p-8 text-center relative border-b border-green-500/10">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-bl-full -z-10 blur-2xl"></div>
+          <div className="mx-auto w-16 h-16 bg-white rounded-2xl shadow-sm border border-green-100 flex items-center justify-center text-green-600 mb-4 transform rotate-3 hover:rotate-0 transition-transform">
+            <Wallet size={32} />
+          </div>
+          <DialogTitle className="text-2xl font-black text-restaurante-oscuro tracking-tight">
             Apertura de Caja
           </DialogTitle>
-          <p className="text-sm text-gray-500 mt-1">Ingresa el monto base (efectivo) con el que inicias el turno.</p>
-        </DialogHeader>
+          <p className="text-sm text-gray-500 mt-2 font-medium px-4">
+            Verifica el efectivo e ingresa el monto inicial para tu turno.
+          </p>
+        </div>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="initialBalance"
-              render={({ field }) => (
-                <FormItem className="space-y-1">
-                  <FormLabel className="text-sm font-semibold text-restaurante-oscuro/90">Fondo Inicial en Gaveta (Bs.)</FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="number" 
-                      step="0.10"
-                      disabled={isSubmitting} 
-                      className="h-12 px-4 bg-white/60 border border-gray-200 rounded-xl text-lg font-mono font-bold transition-all focus:bg-white text-restaurante-primario"
-                      {...field} 
-                      onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
-                      onFocus={(e) => e.target.select()} // Selecciona el "0" al hacer click
-                    />
-                  </FormControl>
-                  <FormMessage className="text-xs text-red-600" />
-                </FormItem>
-              )}
-            />
+        <div className="p-8 pt-6">
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <FormField
+                control={form.control}
+                name="initialBalance"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel className="text-sm font-bold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                      <Coins size={16} className="text-green-500" /> Fondo Inicial (Efectivo)
+                    </FormLabel>
+                    <FormControl>
+                      <div className="relative group">
+                        {/* Indicador de Moneda Fijo */}
+                        <span className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-lg">Bs.</span>
+                        <Input 
+                          type="number" 
+                          step="0.10"
+                          disabled={isSubmitting} 
+                          className="h-16 pl-14 pr-5 bg-gray-50/50 border-2 border-gray-100 rounded-2xl text-3xl font-black text-restaurante-oscuro transition-all focus:bg-white focus:border-green-500 focus:ring-4 focus:ring-green-500/10 hover:border-gray-200"
+                          {...field} 
+                          onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                          onFocus={(e) => e.target.select()} // Selecciona el "0" al hacer click
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage className="text-xs font-semibold text-red-500" />
+                  </FormItem>
+                )}
+              />
 
-            <div className="pt-4 flex gap-3 justify-end">
-              <LoadingButton 
-                type="submit" 
-                isLoading={isSubmitting}
-                loadingText="Abriendo..."
-                className="w-full bg-linear-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-bold h-12 rounded-xl shadow-md shadow-green-500/10"
-              >
-                Confirmar y Abrir Turno
-              </LoadingButton>
-            </div>
-          </form>
-        </Form>
+              <div className="pt-2">
+                <LoadingButton 
+                  type="submit" 
+                  isLoading={isSubmitting}
+                  loadingText="Iniciando turno..."
+                  className="w-full bg-green-500 hover:bg-green-600 text-white font-black text-lg h-14 rounded-2xl shadow-lg shadow-green-500/25 transition-all hover:-translate-y-1"
+                >
+                  <Unlock className="mr-2" size={20} /> Iniciar Turno
+                </LoadingButton>
+              </div>
+            </form>
+          </Form>
+        </div>
       </DialogContent>
     </Dialog>
   )

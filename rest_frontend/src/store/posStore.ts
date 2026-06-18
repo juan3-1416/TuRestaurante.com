@@ -29,7 +29,12 @@ export interface Transaction {
   amount: number
   time: string
   method: "Efectivo" | "QR" | "Tarjeta" | "N/A"
-  cashierName: string // Aquí guardaremos quién hizo la transacción
+  cashierName: string 
+  // Nuevos campos para registro multimoneda y vuelto
+  currency?: "Bs" | "USD"
+  exchangeRate?: number
+  amountReceived?: number
+  change?: number
 }
 
 // Datos iniciales de las mesas (Los movemos aquí desde TableMap)
@@ -58,7 +63,15 @@ interface PosState {
   editTable: (id: string, number: number, capacity: number) => void
   addTransaction: (transaction: Omit<Transaction, "id">) => void
   toggleShift: (isOpen: boolean, initialBalance?: number) => void
-  processPayment: (tableId: string, method: Transaction["method"], cashierName: string) => void
+  processPayment: (
+    tableId: string, 
+    method: Transaction["method"], 
+    cashierName: string,
+    currency?: "Bs" | "USD",
+    amountReceived?: number,
+    change?: number,
+    exchangeRate?: number
+  ) => void
 }
 
 // 3. Creación del Store
@@ -68,12 +81,10 @@ export const usePosStore = create<PosState>((set, get) => ({
   isShiftOpen: false,
   shiftInitialBalance: 0,
 
-  // Actualiza una mesa específica (ej. de Libre a Ocupada)
   updateTable: (updatedTable) => set((state) => ({
     tables: state.tables.map(t => t.id === updatedTable.id ? updatedTable : t)
   })),
 
-  // Agrega una nueva mesa localmente
   addTable: (number, capacity) => set((state) => ({
     tables: [...state.tables, {
       id: `t_${Date.now()}`,
@@ -84,44 +95,42 @@ export const usePosStore = create<PosState>((set, get) => ({
     }]
   })),
 
-  // Elimina una mesa localmente
   deleteTable: (id) => set((state) => ({
     tables: state.tables.filter(t => t.id !== id)
   })),
 
-  // Edita una mesa localmente
   editTable: (id, number, capacity) => set((state) => ({
     tables: state.tables.map(t => t.id === id ? { ...t, number, capacity } : t)
   })),
 
-  // Añade un ingreso o gasto al historial de la caja
   addTransaction: (tx) => set((state) => ({
     transactions: [{ ...tx, id: crypto.randomUUID() }, ...state.transactions]
   })),
 
-  // Abre o cierra la caja
   toggleShift: (isOpen, initialBalance = 0) => set(() => ({
     isShiftOpen: isOpen,
     shiftInitialBalance: isOpen ? initialBalance : 0,
-    transactions: isOpen ? [] : [] // Opcional: Limpiar transacciones al cerrar turno
+    transactions: isOpen ? [] : []
   })),
 
-  // Esta función cobra la mesa, la libera y registra el ingreso en la caja
-  processPayment: (tableId, method, cashierName) => {
+  // Modificado para aceptar y guardar los nuevos parámetros multimoneda
+  processPayment: (tableId, method, cashierName, currency = "Bs", amountReceived = 0, change = 0, exchangeRate = 6.96) => {
     const table = get().tables.find(t => t.id === tableId)
     if (!table || table.status !== "Ocupada" || !table.currentTotal) return
 
-    // Registramos el ingreso
     get().addTransaction({
       type: "income",
       description: `Cobro Mesa ${table.number} (${table.customerName || 'Cliente'})`,
-      amount: table.currentTotal,
+      amount: table.currentTotal, // El monto base siempre en Bs. para la contabilidad
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       method: method,
-      cashierName: cashierName
+      cashierName: cashierName,
+      currency,
+      amountReceived,
+      change,
+      exchangeRate
     })
 
-    // Liberamos la mesa
     get().updateTable({
       ...table,
       status: "Libre",
