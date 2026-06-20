@@ -1,113 +1,43 @@
 "use client"
 
-import { useState } from "react"
 import { Wallet, ArrowDownRight, ArrowUpRight, Lock, Unlock, FileText, Receipt, Banknote, QrCode, CreditCard, DollarSign } from "lucide-react"
 import { LoadingButton } from "@/shared/components/LoadingButton"
 import { ExpenseModal } from "./ExpenseModal"
 import { OpenShiftModal } from "./OpenShiftModal"
 import { CloseShiftModal } from "./CloseShiftModal"
-import { ReceiptModal, ReceiptData } from "./ReceiptModal"
-import { usePosStore, Table } from "@/store/posStore"
-import { useAuthStore } from "@/store/authStore"
+import { ReceiptModal } from "./ReceiptModal"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-
-const EXCHANGE_RATE = 6.96; // Tasa de cambio oficial en Bolivia
+import { useCaja, EXCHANGE_RATE } from "../hooks/useCaja"
 
 export function CajaDashboard() {
-  const user = useAuthStore((state) => state.user) 
-  const cashierName = user?.name || user?.username || "Cajero Principal"
-
-  const { 
-    isShiftOpen, 
-    shiftInitialBalance, 
-    transactions, 
-    tables, 
-    processPayment 
-  } = usePosStore()
-
-  // Estados del Modal Principal y Recibo
-  const [selectedTableForPayment, setSelectedTableForPayment] = useState<Table | null>(null)
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false)
-  const [receiptData, setReceiptData] = useState<ReceiptData | null>(null)
-
-  // Estados interactivos para el Modal de Cobro
-  const [paymentMethod, setPaymentMethod] = useState<"Efectivo" | "QR" | "Tarjeta">("Efectivo")
-  const [paymentCurrency, setPaymentCurrency] = useState<"Bs" | "USD">("Bs")
-  const [amountReceived, setAmountReceived] = useState<number | "">("")
-
-  // Cálculos Financieros Generales
-  const income = transactions.filter(t => t.type === "income").reduce((acc, t) => acc + t.amount, 0)
-  const expenses = transactions.filter(t => t.type === "expense").reduce((acc, t) => acc + t.amount, 0)
-  const currentTotal = shiftInitialBalance + income - expenses
-  const pendingTables = tables.filter(t => t.status === "Ocupada" && (t.currentTotal || 0) > 0)
-
-  // Cálculos Específicos del Modal de Cobro
-  const tableTotalBs = selectedTableForPayment?.currentTotal || 0;
-  const tableTotalUSD = tableTotalBs / EXCHANGE_RATE;
-  
-  const changeBs = paymentMethod === "Efectivo" 
-    ? (paymentCurrency === "Bs" 
-        ? (Number(amountReceived) || 0) - tableTotalBs 
-        : ((Number(amountReceived) || 0) * EXCHANGE_RATE) - tableTotalBs)
-    : 0;
-
-  const handleOpenPaymentModal = (table: Table) => {
-    setSelectedTableForPayment(table);
-    setPaymentMethod("Efectivo");
-    setPaymentCurrency("Bs");
-    setAmountReceived("");
-  }
-
-  const handleConfirmPayment = async () => {
-    if (!selectedTableForPayment) return
-    
-    if (paymentMethod === "Efectivo" && changeBs < 0) {
-      alert("El monto recibido es menor al total a pagar.");
-      return;
-    }
-
-    setIsProcessingPayment(true)
-    
-    const orderItems = selectedTableForPayment.orders || [];
-    const groupedOrders = orderItems.reduce((acc, product) => {
-      const existing = acc.find(item => item.name === product.name);
-      if (existing) {
-        existing.qty += 1;
-        existing.subtotal += product.price;
-      } else {
-        acc.push({ name: product.name, qty: 1, subtotal: product.price });
-      }
-      return acc;
-    }, [] as ReceiptData["items"]);
-
-    const newReceipt = {
-      tableNumber: selectedTableForPayment.number,
-      cashierName: cashierName,
-      method: paymentMethod,
-      items: groupedOrders,
-      total: tableTotalBs,
-      date: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
-    };
-    
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    // Guardamos incluyendo la información de la moneda y el vuelto
-    processPayment(
-      selectedTableForPayment.id, 
-      paymentMethod, 
-      cashierName,
-      paymentCurrency,
-      Number(amountReceived) || 0,
-      changeBs,
-      EXCHANGE_RATE
-    )
-    
-    setSelectedTableForPayment(null)
-    setIsProcessingPayment(false)
-    setReceiptData(newReceipt)
-  }
+  const {
+    cashierName,
+    isShiftOpen,
+    shiftInitialBalance,
+    transactions,
+    selectedTableForPayment,
+    setSelectedTableForPayment,
+    isProcessingPayment,
+    receiptData,
+    setReceiptData,
+    paymentMethod,
+    setPaymentMethod,
+    paymentCurrency,
+    setPaymentCurrency,
+    amountReceived,
+    setAmountReceived,
+    income,
+    expenses,
+    currentTotal,
+    pendingTables,
+    tableTotalBs,
+    tableTotalUSD,
+    changeBs,
+    handleOpenPaymentModal,
+    handleConfirmPayment
+  } = useCaja()
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
@@ -168,7 +98,7 @@ export function CajaDashboard() {
         <div className="p-6 rounded-[2rem] bg-restaurante-primario/5 backdrop-blur-md border border-restaurante-primario/20 shadow-sm relative overflow-hidden group">
           <p className="text-xs font-bold text-restaurante-primario uppercase tracking-widest relative z-10 flex items-center gap-1"><Wallet size={14}/> Saldo Total</p>
           <div className="flex items-end gap-2 mt-1 relative z-10">
-            <p className="text-3xl font-black text-restaurante-primario tracking-tighter">Bs. {isShiftOpen ? currentTotal.toFixed(2) : "0.00"}</p>
+            <p className="text-2xl font-black text-restaurante-primario tracking-tighter">Bs. {isShiftOpen ? currentTotal.toFixed(2) : "0.00"}</p>
             {isShiftOpen && <span className="text-sm font-bold text-restaurante-primario/60 mb-1.5">(${(currentTotal / EXCHANGE_RATE).toFixed(2)})</span>}
           </div>
         </div>
@@ -183,7 +113,6 @@ export function CajaDashboard() {
               {pendingTables.length} mesas
             </span>
           </h3>
-
           {pendingTables.length === 0 ? (
             <p className="text-sm text-center text-gray-500 italic py-6 bg-white/50 rounded-3xl border border-dashed border-gray-200">
               No hay cuentas pendientes por cobrar en este momento.
@@ -198,8 +127,7 @@ export function CajaDashboard() {
                   </div>
                   <button 
                     onClick={() => handleOpenPaymentModal(table)}
-                    className="bg-restaurante-primario/10 text-restaurante-primario hover:bg-restaurante-primario hover:text-white p-3 rounded-2xl transition-colors"
-                  >
+                    className="bg-restaurante-primario/10 text-restaurante-primario hover:bg-restaurante-primario hover:text-white p-3 rounded-2xl transition-colors">
                     <Receipt size={20} />
                   </button>
                 </div>
@@ -311,8 +239,7 @@ export function CajaDashboard() {
                       paymentMethod === method
                         ? "bg-restaurante-primario text-white border-restaurante-primario shadow-md"
                         : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
-                    }`}
-                  >
+                    }`}>
                     {method === "Efectivo" && <Banknote size={18} />}
                     {method === "QR" && <QrCode size={18} />}
                     {method === "Tarjeta" && <CreditCard size={18} />}
@@ -337,14 +264,12 @@ export function CajaDashboard() {
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={() => setPaymentCurrency("Bs")}
-                        className={`py-1.5 rounded-xl text-sm font-bold transition-all border ${paymentCurrency === "Bs" ? "bg-gray-800 text-white border-gray-800 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}
-                      >
+                        className={`py-1.5 rounded-xl text-sm font-bold transition-all border ${paymentCurrency === "Bs" ? "bg-gray-800 text-white border-gray-800 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
                         Bs
                       </button>
                       <button
                         onClick={() => setPaymentCurrency("USD")}
-                        className={`py-1.5 rounded-xl text-sm font-bold transition-all border ${paymentCurrency === "USD" ? "bg-green-600 text-white border-green-600 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}
-                      >
+                        className={`py-1.5 rounded-xl text-sm font-bold transition-all border ${paymentCurrency === "USD" ? "bg-green-600 text-white border-green-600 shadow-sm" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"}`}>
                         USD
                       </button>
                     </div>

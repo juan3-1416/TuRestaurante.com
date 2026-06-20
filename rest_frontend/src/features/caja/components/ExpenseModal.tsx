@@ -139,8 +139,7 @@ export function ExpenseModal({ cashierName }: ExpenseModalProps) {
                   </FormControl>
                   <FormMessage className="text-[11px] text-red-600 font-semibold" />
                 </FormItem>
-              )}
-            />
+              )}/>
 
             <FormField
               control={form.control}

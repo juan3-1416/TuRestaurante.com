@@ -1,36 +1,11 @@
 "use client"
 
-import { useState } from "react"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import * as z from "zod"
 import { Plus } from "lucide-react"
-
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/shared/components/LoadingButton"
-import { apiClient } from "@/lib/axios"
-
-// Esquema de validación para el nuevo platillo/variante
-const formSchema = z.object({
-  name: z.string().min(3, { message: "El nombre debe tener al menos 3 caracteres." }),
-  price: z.number().min(0.1, { message: "El precio debe ser mayor a 0." }),
-  status: z.enum(["Disponible", "Agotado"]),
-})
+import { useVariant } from "../hooks/useVariant"
 
 interface VariantModalProps {
   subcategoryId: number | string
@@ -40,51 +15,9 @@ interface VariantModalProps {
   trigger?: React.ReactNode
 }
 
-export function VariantModal({ subcategoryId, subcategoryName, onSuccess, itemToEdit, trigger }: VariantModalProps) {
-  const [isOpen, setIsOpen] = useState(false)
-
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: itemToEdit?.name || "",
-      price: itemToEdit ? Number(itemToEdit.price) : 0,
-      status: (itemToEdit?.status as "Disponible" | "Agotado") || "Disponible",
-    },
-  })
-
-  const { isSubmitting } = form.formState
-
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    try {
-      if (itemToEdit) {
-        console.log(`Editando variante ${itemToEdit.id}:`, values)
-        await apiClient.put(`/inventory/products/${itemToEdit.id}/`, {
-          ...values,
-          subcategory: subcategoryId
-        })
-      } else {
-        console.log(`Guardando variante en ${subcategoryName}:`, values)
-        await apiClient.post('/inventory/products/', {
-          ...values,
-          subcategory: subcategoryId
-        })
-      }
-      
-      // Cerramos el modal y limpiamos el formulario si fue exitoso
-      setIsOpen(false)
-      form.reset()
-
-      // Avisamos al componente padre
-      if (onSuccess) {
-        onSuccess()
-      }
-    } catch (error) {
-      console.error("Error al guardar variante:", error)
-      setIsOpen(false)
-      form.reset()
-      if (onSuccess) onSuccess()
-    }
-  }
+export function VariantModal(props: VariantModalProps) {
+  const { subcategoryName, itemToEdit, trigger } = props
+  const { isOpen, setIsOpen, form, isSubmitting, onSubmit } = useVariant(props)
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -92,8 +25,8 @@ export function VariantModal({ subcategoryId, subcategoryName, onSuccess, itemTo
         {trigger ? (
           trigger
         ) : (
-          <button className="text-[11px] font-bold text-restaurante-primario hover:underline flex items-center gap-1.5 transition-all hover:scale-105 active:scale-95">
-            <Plus size={13} /> Añadir Variante
+          <button className="px-3 py-1.5 rounded-lg bg-restaurante-primario/10 border border-restaurante-primario/20 text-restaurante-primario text-xs font-bold flex items-center gap-1.5 transition-all hover:bg-restaurante-primario hover:text-white hover:scale-105 active:scale-95 shadow-sm">
+            <Plus size={14} /> Añadir Platillo
           </button>
         )}
       </DialogTrigger>

@@ -1,8 +1,8 @@
 import { DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Users, Clock, Receipt, PlusCircle, Coffee, CalendarClock, X, Edit2 } from "lucide-react"
 import { LoadingButton } from "@/shared/components/LoadingButton"
-import { Table, OrderItem } from "@/store/posStore"
-import { useState } from "react"
+import { Table } from "@/store/posStore"
+import { useTableStatusDetail } from "../hooks/useTableStatusDetail"
 import { TableModal } from "./TableModal"
 
 interface TableStatusDetailProps {
@@ -21,34 +21,16 @@ export function TableStatusDetail({
   onConfirmReservation
 }: TableStatusDetailProps) {
   
-  const [isReserving, setIsReserving] = useState(false)
-  const [reserveName, setReserveName] = useState("")
-  const [reserveTime, setReserveTime] = useState("")
-
-  const [prevTableId, setPrevTableId] = useState<string | null>(null)
-
-  if (table.id !== prevTableId) {
-    setPrevTableId(table.id)
-    setIsReserving(false)
-    setReserveName("")
-    setReserveTime("")
-  }
-
-  // 1. Calculamos el total leyendo directamente de la mesa
-  const calculatedTotal = table.currentTotal || 0;
-
-  // 2. Agrupamos por tickets (orderId)
-  const groupedTickets = (table.orders || []).reduce((acc, order) => {
-    const tId = order.orderId || "Orden 1"; // Para soporte de datos antiguos
-    if (!acc[tId]) {
-      acc[tId] = { id: tId, items: [], total: 0 };
-    }
-    acc[tId].items.push(order);
-    acc[tId].total += order.price;
-    return acc;
-  }, {} as Record<string, { id: string, items: OrderItem[], total: number }>);
-  
-  const tickets = Object.values(groupedTickets);
+  const {
+    isReserving,
+    setIsReserving,
+    reserveName,
+    setReserveName,
+    reserveTime,
+    setReserveTime,
+    calculatedTotal,
+    tickets
+  } = useTableStatusDetail(table)
 
   return (
     <>
@@ -71,8 +53,7 @@ export function TableStatusDetail({
                   <button className="px-3 py-1.5 rounded-xl bg-white/60 hover:bg-white text-gray-500 hover:text-restaurante-primario border border-gray-200/50 shadow-xs transition-all flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider">
                     <Edit2 size={12} /> Editar
                   </button>
-                }
-              />
+                }/>
             </div>
           </div>
         </DialogHeader>
