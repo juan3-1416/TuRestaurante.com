@@ -1,6 +1,7 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from apps.tables.infrastructure.models import Table
 from apps.orders.infrastructure.models import Order, OrderItem
 from apps.inventory.infrastructure.models import Product
@@ -9,6 +10,7 @@ from .serializers import TableSerializer
 class TableViewSet(viewsets.ModelViewSet):
     queryset = Table.objects.all()
     serializer_class = TableSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return super().get_queryset().filter(is_active=True)

@@ -57,8 +57,10 @@ class CashierViewSet(viewsets.ViewSet):
         serializer = CashShiftSerializer(shift)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-class TransactionViewSet(viewsets.ViewSet):
+class TransactionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
+    queryset = Transaction.objects.all().order_by('-created_at')
+    serializer_class = TransactionSerializer
 
     @action(detail=False, methods=['post'])
     def expense(self, request):
