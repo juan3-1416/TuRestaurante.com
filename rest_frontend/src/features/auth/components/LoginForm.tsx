@@ -40,12 +40,13 @@ export function LoginForm(){
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
             console.log("Conectando al servidor...", values);
-            // Petición POST oficial a Django (`/api/auth/token/`)
-            const response = await api.post('/auth/token/', values);
+            // Petición POST oficial a Django (`/api/users/token/`)
+            const response = await api.post('/users/token/', values);
             
             const token = response.data.access;
+            const refreshToken = response.data.refresh;
 
-            login(token);
+            login(token, refreshToken);
             router.push("/dashboard");
             
         } catch (error) {

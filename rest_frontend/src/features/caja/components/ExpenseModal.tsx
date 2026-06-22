@@ -1,9 +1,5 @@
 "use client"
 
-import { useState } from "react"
-import { useForm } from "react-hook-form"
-import { zodResolver } from "@hookform/resolvers/zod"
-import * as z from "zod"
 import { ArrowDownRight } from "lucide-react"
 
 import {
@@ -23,59 +19,10 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/shared/components/LoadingButton"
-import { usePosStore } from "@/store/posStore"
+import { useExpenseModal } from "../hooks/useExpenseModal"
 
-const expenseSchema = z.object({
-  reason: z.string().min(3, { message: "La razón debe tener al menos 3 caracteres." }),
-  amount: z.number().min(0.1, { message: "El monto debe ser mayor a 0." }),
-  description: z.string().optional(),
-})
-
-interface ExpenseModalProps {
-  cashierName: string
-}
-
-export function ExpenseModal({ cashierName }: ExpenseModalProps) {
-  const [isOpen, setIsOpen] = useState(false)
-  const addTransaction = usePosStore((state) => state.addTransaction)
-
-  const form = useForm<z.infer<typeof expenseSchema>>({
-    resolver: zodResolver(expenseSchema),
-    defaultValues: {
-      reason: "",
-      amount: 0,
-      description: "",
-    },
-  })
-
-  const { isSubmitting } = form.formState
-
-  async function onSubmit(values: z.infer<typeof expenseSchema>) {
-    try {
-      // Simulación de delay de red para el botón de carga
-      await new Promise((resolve) => setTimeout(resolve, 800))
-
-      // Combinamos la razón y la descripción opcional de manera limpia
-      const finalDescription = values.description?.trim() 
-        ? `${values.reason} (${values.description})` 
-        : values.reason
-
-      // Registramos el egreso en el store global
-      addTransaction({
-        type: "expense",
-        description: finalDescription,
-        amount: values.amount,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        method: "Efectivo", // Los gastos menores de caja chica suelen ser en efectivo
-        cashierName: cashierName
-      })
-
-      setIsOpen(false)
-      form.reset()
-    } catch (error) {
-      console.error("Error al registrar gasto:", error)
-    }
-  }
+export function ExpenseModal() {
+  const { isOpen, setIsOpen, form, isSubmitting, onSubmit } = useExpenseModal()
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>

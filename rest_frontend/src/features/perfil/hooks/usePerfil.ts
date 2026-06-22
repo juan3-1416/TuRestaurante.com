@@ -3,8 +3,9 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { useAuthStore } from "@/store/authStore"
+import { useMutation } from "@tanstack/react-query"
+import { apiClient } from "@/lib/axios"
 
-// Validación estricta sin any para typescript
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, "Ingresa tu contraseña actual."),
   newPassword: z.string().min(6, "La nueva contraseña debe tener al menos 6 caracteres."),
@@ -29,28 +30,38 @@ export function usePerfil() {
     },
   })
 
-  const onSubmit = async (values: PasswordFormValues) => {
-    try {
-      setIsSuccess(false)
-      // Simulación de llamada PUT a la API (Endpoint de cambio de contraseña)
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      
-      console.log(`Contraseña cambiada para ${user?.username}:`, values)
-      
+  const changePasswordMutation = useMutation({
+    mutationFn: async (values: PasswordFormValues) => {
+      // El backend recibe current_password y password 
+      // u otros campos definidos en la API
+      const response = await apiClient.put('/users/me/', {
+        // Asumiendo que el backend actualiza password así
+        // TODO: Ajustar claves si el backend espera un formato diferente (e.g. current_password y new_password)
+        password: values.newPassword,
+        current_password: values.currentPassword
+      })
+      return response.data
+    },
+    onSuccess: () => {
       setIsSuccess(true)
       form.reset()
-      
-      // Ocultar el mensaje de éxito después de 3 segundos
       setTimeout(() => setIsSuccess(false), 3000)
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error("Error al cambiar la contraseña:", error)
+      form.setError("currentPassword", { message: "Verifica tu contraseña actual o intentalo nuevamente." })
     }
+  })
+
+  const onSubmit = async (values: PasswordFormValues) => {
+    setIsSuccess(false)
+    await changePasswordMutation.mutateAsync(values)
   }
 
   return {
     user,
     form,
-    isSubmitting: form.formState.isSubmitting,
+    isSubmitting: changePasswordMutation.isPending,
     isSuccess,
     onSubmit,
   }

@@ -10,14 +10,16 @@ import { useVariant } from "../hooks/useVariant"
 interface VariantModalProps {
   subcategoryId: number | string
   subcategoryName?: string
-  onSuccess?: () => void
   itemToEdit?: { id: number; name: string; price: string | number; status: string }
   trigger?: React.ReactNode
 }
 
 export function VariantModal(props: VariantModalProps) {
   const { subcategoryName, itemToEdit, trigger } = props
-  const { isOpen, setIsOpen, form, isSubmitting, onSubmit } = useVariant(props)
+  const { isOpen, setIsOpen, form, isSubmitting, onSubmit } = useVariant({
+    subcategoryId: props.subcategoryId,
+    itemToEdit: props.itemToEdit
+  })
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>

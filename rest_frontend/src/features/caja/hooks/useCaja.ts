@@ -1,21 +1,22 @@
 import { useState } from "react"
-import { usePosStore, Table } from "@/store/posStore"
+import { Table } from "@/store/posStore"
+import { useTables } from "@/features/pos/hooks/useTables"
+import { useShift } from "./useShift"
 import { useAuthStore } from "@/store/authStore"
 import { ReceiptData } from "../components/ReceiptModal"
+import { apiClient } from "@/lib/axios"
 
 export const EXCHANGE_RATE = 7.52; // Tasa de cambio
 
 export function useCaja() {
   const user = useAuthStore((state) => state.user) 
-  const cashierName = user?.name || user?.username || "Cajero Principal"
+  const cashierName = user?.first_name || user?.username || "Cajero Principal"
 
-  const { 
-    isShiftOpen, 
-    shiftInitialBalance, 
-    transactions, 
-    tables, 
-    processPayment 
-  } = usePosStore()
+  const { tables, refetch: refetchTables } = useTables()
+  const { shift, isShiftOpen, refetch: refetchShift } = useShift()
+  
+  const shiftInitialBalance = shift ? Number(shift.initial_balance) : 0
+  const transactions = shift?.transactions || []
 
   // Estados del Modal Principal y Recibo
   const [selectedTableForPayment, setSelectedTableForPayment] = useState<Table | null>(null)
@@ -27,10 +28,10 @@ export function useCaja() {
   const [paymentCurrency, setPaymentCurrency] = useState<"Bs" | "USD">("Bs")
   const [amountReceived, setAmountReceived] = useState<number | "">("")
 
-  // Cálculos Financieros Generales
-  const income = transactions.filter(t => t.type === "income").reduce((acc, t) => acc + t.amount, 0)
-  const expenses = transactions.filter(t => t.type === "expense").reduce((acc, t) => acc + t.amount, 0)
-  const currentTotal = shiftInitialBalance + income - expenses
+  // Cálculos Financieros Generales - Consumiendo API
+  const income = shift ? Number(shift.total_income || 0) : 0;
+  const expenses = shift ? Number(shift.total_expenses || 0) : 0;
+  const currentTotal = shift ? Number(shift.current_balance || 0) : 0;
   const pendingTables = tables.filter(t => t.status === "Ocupada" && (t.currentTotal || 0) > 0)
 
   // Cálculos Específicos del Modal de Cobro
@@ -83,16 +84,25 @@ export function useCaja() {
     
     await new Promise(resolve => setTimeout(resolve, 1000))
     
-    // Guardamos incluyendo la información de la moneda y el vuelto
-    processPayment(
-      selectedTableForPayment.id, 
-      paymentMethod, 
-      cashierName,
-      paymentCurrency,
-      Number(amountReceived) || 0,
-      changeBs,
-      EXCHANGE_RATE
-    )
+    try {
+      // 1. Petición al Backend para cobrar la orden
+      const orderId = selectedTableForPayment.orders?.[0]?.orderId || selectedTableForPayment.id;
+      
+      await apiClient.post(`/orders/${orderId}/pay/`, {
+        payment_method: paymentMethod,
+      });
+
+      // 2. Petición para liberar la mesa
+      await apiClient.patch(`/tables/${selectedTableForPayment.id}/update_status/`, {
+        status: "Libre"
+      });
+
+      // 3. (Refetch) Invalida caché de React Query para actualizar mesas y caja
+      await Promise.all([refetchTables(), refetchShift()]);
+
+    } catch (error) {
+      console.error("Error al procesar el cobro:", error);
+    }
     
     setSelectedTableForPayment(null)
     setIsProcessingPayment(false)

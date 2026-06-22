@@ -2,49 +2,77 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { apiClient } from "@/lib/axios"
+import { isAxiosError } from "axios"
 
 export const createUserSchema = z.object({
-  name: z.string().min(3, "El nombre debe tener al menos 3 caracteres."),
+  first_name: z.string().min(2, "El nombre debe tener al menos 2 caracteres."),
+  last_name: z.string().optional(),
   username: z.string()
     .min(3, "El usuario debe tener al menos 3 caracteres.")
     .regex(/^\S+$/, "El nombre de usuario no puede contener espacios."),
   password: z.string().min(6, "La contraseña debe tener al menos 6 caracteres."),
-  role: z.enum(["Admin", "Cajero", "Mesero"], { error: "Debes seleccionar un rol." }),
+  role: z.enum(["ADMIN", "CASHIER", "WAITER"], { error: "Debes seleccionar un rol." }),
   address: z.string().optional(),
-  accountNumber: z.string().optional(),
+  bank_account_number: z.string().optional(),
+  phone_number: z.string().optional(),
 })
 
 export type CreateUserFormValues = z.infer<typeof createUserSchema>;
 
-interface UseCreateUserProps {
-  onUserCreated: (user: CreateUserFormValues) => void;
-}
-
-export function useCreateUser({ onUserCreated }: UseCreateUserProps) {
+export function useCreateUser() {
   const [isOpen, setIsOpen] = useState(false)
+  const queryClient = useQueryClient()
 
   const form = useForm<CreateUserFormValues>({
     resolver: zodResolver(createUserSchema),
     defaultValues: {
-      name: "",
+      first_name: "",
+      last_name: "",
       username: "",
       password: "",
-      role: "Cajero", // Por defecto será Cajero
+      role: "CASHIER",
       address: "",
-      accountNumber: "",
+      bank_account_number: "",
+      phone_number: "",
     },
+  })
+
+  const createUserMutation = useMutation({
+    mutationFn: async (values: CreateUserFormValues) => {
+      const response = await apiClient.post('/users/', values)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] })
+      setIsOpen(false)
+      form.reset()
+    },
+    onError: (error: unknown) => {
+      console.error("Error al crear usuario completo:", error)
+      if (isAxiosError(error) && error.response && error.response.data) {
+        console.error("Detalle de validación del backend:", error.response.data)
+        alert("Error de validación del backend: " + JSON.stringify(error.response.data, null, 2))
+      }
+    }
   })
 
   async function onSubmit(values: CreateUserFormValues) {
     try {
-      // Simulación de conexión a la API
-      await new Promise((resolve) => setTimeout(resolve, 800))
-      
-      onUserCreated(values) // Enviamos los datos a la tabla principal
-      setIsOpen(false)
-      form.reset()
+      // Remover strings vacíos para evitar que el backend los rechace si espera null
+      const payload: Partial<CreateUserFormValues> = { ...values }
+      Object.keys(payload).forEach(key => {
+        const k = key as keyof CreateUserFormValues;
+        if (payload[k] === "") {
+          delete payload[k]
+        }
+      })
+      await createUserMutation.mutateAsync(payload as CreateUserFormValues)
     } catch (error) {
-      console.error("Error al crear usuario:", error)
+      // El error ya es manejado por el onError de la mutación, 
+      // pero el catch previene el "Uncaught in promise" de react-hook-form
+      console.error("Error capturado en onSubmit:", error)
     }
   }
 
@@ -59,6 +87,6 @@ export function useCreateUser({ onUserCreated }: UseCreateUserProps) {
     form,
     onSubmit,
     handleOpenChange,
-    isSubmitting: form.formState.isSubmitting
+    isSubmitting: createUserMutation.isPending
   }
 }

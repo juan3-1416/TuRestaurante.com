@@ -32,7 +32,8 @@ export function TableProductMenu({
     cartItems,
     handleAddProduct,
     handleRemoveProduct,
-    handleRemoveAllOfProduct
+    handleRemoveAllOfProduct,
+    isLoadingProducts
   } = useTableProductMenu({ selectedProducts, setSelectedProducts })
 
   return (
@@ -76,48 +77,65 @@ export function TableProductMenu({
           {/* Grilla de Productos */}
           <div className="p-6 overflow-y-auto flex-1 scrollbar-hide">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {filteredProducts.map(product => {
-                const quantity = selectedProducts.filter(p => p.id === product.id).length;
-                const isSelected = quantity > 0;
-
-                return (
-                  <div 
-                    key={product.id}
-                    onClick={() => handleAddProduct(product)}
-                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between min-h-[120px] group hover:-translate-y-1 hover:shadow-md ${
-                      isSelected 
-                        ? 'bg-restaurante-primario/5 border-restaurante-primario shadow-sm' 
-                        : 'bg-white border-gray-100 hover:border-restaurante-primario/40'
-                    }`}
-                  >
-                    <div className="mb-2">
-                      <p className="font-bold text-restaurante-oscuro leading-tight">{product.name}</p>
-                      <p className="text-xs text-gray-500 mt-1 line-clamp-1">{product.category}</p>
-                    </div>
-                    <div className="flex items-center justify-between mt-auto">
-                      <span className="font-mono font-bold text-gray-800 bg-gray-100 px-2 py-1 rounded-lg text-sm">Bs. {product.price.toFixed(2)}</span>
-                      
-                      {isSelected ? (
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center bg-restaurante-primario text-white font-bold text-sm shadow-md">
-                          {quantity}
-                        </div>
-                      ) : (
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center border border-gray-200 text-gray-400 group-hover:bg-restaurante-primario group-hover:border-restaurante-primario group-hover:text-white transition-all">
-                          <Plus size={18} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-              
-              {filteredProducts.length === 0 && (
+              {isLoadingProducts ? (
+                <div className="col-span-full py-12 flex flex-col items-center justify-center text-restaurante-primario">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-restaurante-primario mb-4"></div>
+                  <p className="text-lg font-medium">Cargando menú...</p>
+                </div>
+              ) : filteredProducts.length === 0 ? (
                 <div className="col-span-full py-12 flex flex-col items-center justify-center text-gray-400">
                   <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
                     <ShoppingCart size={24} className="text-gray-300" />
                   </div>
                   <p className="text-lg font-medium">No hay productos en esta categoría</p>
                 </div>
+              ) : (
+                filteredProducts.map(product => {
+                  const quantity = selectedProducts.filter(p => p.id === product.id).length;
+                  const isSelected = quantity > 0;
+                  const isSoldOut = product.status === "Agotado";
+
+                  return (
+                    <div 
+                      key={product.id}
+                      onClick={() => !isSoldOut && handleAddProduct(product)}
+                      className={`p-4 rounded-2xl border transition-all flex flex-col justify-between min-h-[120px] group shadow-sm ${
+                        isSoldOut 
+                          ? 'bg-gray-50/50 border-gray-100 opacity-60 cursor-not-allowed'
+                          : isSelected 
+                            ? 'bg-restaurante-primario/5 border-restaurante-primario cursor-pointer hover:-translate-y-1 hover:shadow-md' 
+                            : 'bg-white border-gray-100 cursor-pointer hover:border-restaurante-primario/40 hover:-translate-y-1 hover:shadow-md'
+                      }`}
+                    >
+                      <div className="mb-2">
+                        <div className="flex justify-between items-start gap-2">
+                          <p className="font-bold text-restaurante-oscuro leading-tight line-clamp-2">{product.name}</p>
+                          {isSoldOut && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-red-100 text-red-700 border border-red-200 shrink-0">
+                              Agotado
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1 line-clamp-1">{product.category}</p>
+                      </div>
+                      <div className="flex items-center justify-between mt-auto">
+                        <span className="font-mono font-bold text-gray-800 bg-gray-100 px-2 py-1 rounded-lg text-sm">Bs. {product.price.toFixed(2)}</span>
+                        
+                        {!isSoldOut && (
+                          isSelected ? (
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-restaurante-primario text-white font-bold text-sm shadow-md">
+                              {quantity}
+                            </div>
+                          ) : (
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center border border-gray-200 text-gray-400 group-hover:bg-restaurante-primario group-hover:border-restaurante-primario group-hover:text-white transition-all">
+                              <Plus size={18} />
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
               )}
             </div>
           </div>

@@ -2,9 +2,10 @@
 
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { useState } from "react"
-import { usePosStore, Table, OrderItem } from "@/store/posStore"
+import { Table, OrderItem } from "@/store/posStore"
 import { TableStatusDetail } from "./TableStatusDetail"
 import { TableProductMenu, Product } from "./TableProductMenu"
+import { useTables } from "../hooks/useTables"
 
 interface TableDetailProps {
   table: Table | null
@@ -13,7 +14,7 @@ interface TableDetailProps {
 }
 
 export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
-  const updateTable = usePosStore((state) => state.updateTable)
+  const { updateTableStatus } = useTables()
   const [isLoading, setIsLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<"detail" | "products">("detail")
@@ -38,10 +39,9 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
   const handleConfirmReservation = async (name: string, time: string) => {
     setIsLoading(true)
     setActionLoading("Confirmar Reserva")
-    await new Promise(resolve => setTimeout(resolve, 600))
     
-    updateTable({
-      ...table,
+    await updateTableStatus.mutateAsync({
+      id: table.id,
       status: "Reservada",
       customerName: name,
       activeTime: time,
@@ -56,19 +56,17 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
   const handleAction = async (actionName: string) => {
     setIsLoading(true)
     setActionLoading(actionName)
-    await new Promise(resolve => setTimeout(resolve, 600))
     
-    if (actionName === "Abriendo") {
-      updateTable({
-        ...table,
+    if (actionName === "Abriendo" || actionName === "Asignando") {
+      await updateTableStatus.mutateAsync({
+        id: table.id,
         status: "Ocupada",
-        customerName: "Cliente Casual",
-        activeTime: "0 min",
-        currentTotal: 0,
-        orders: []
+        customerName: actionName === "Abriendo" ? "Cliente Casual" : (table.customerName || "Cliente de Reserva"),
+        orders: [],
+        activeTime: "0 min"
       })
       onClose()
-    } else if (actionName === "Tomando orden") {
+    } else if (actionName === "Tomando orden" || actionName === "Agregar Nueva Orden") {
       setOrderMode("append")
       setEditingTicketId(crypto.randomUUID())
       setSelectedProducts([])
@@ -90,21 +88,6 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
         }))
       setSelectedProducts(mapped)
       setViewMode("products")
-    } else if (actionName === "Agregar Nueva Orden") {
-      setOrderMode("append")
-      setEditingTicketId(crypto.randomUUID())
-      setSelectedProducts([]) // Empezamos con el carrito en blanco para no modificar lo existente
-      setViewMode("products")
-    } else if (actionName === "Asignando") {
-      updateTable({
-        ...table,
-        status: "Ocupada",
-        customerName: table.customerName || "Cliente de Reserva",
-        activeTime: "0 min",
-        currentTotal: 0,
-        orders: []
-      })
-      onClose()
     } else if (actionName === "Enviar a Cocina" || actionName === "Solo Modificar") {
       
       let finalOrders: OrderItem[] = [];
@@ -126,14 +109,14 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
         finalOrders = [...otherOrders, ...newMappedOrders];
       }
       
-      const finalTotal = finalOrders.reduce((acc, o) => acc + o.price, 0);
-
-      updateTable({
-        ...table,
+      await updateTableStatus.mutateAsync({
+        id: table.id,
         status: "Ocupada",
-        currentTotal: finalTotal,
-        orders: finalOrders
+        customerName: table.customerName || "Cliente Casual",
+        orders: finalOrders,
+        activeTime: table.activeTime || "0 min"
       })
+      
       setViewMode("detail")
     }
 

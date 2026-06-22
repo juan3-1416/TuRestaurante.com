@@ -2,6 +2,7 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 
 export const variantFormSchema = z.object({
@@ -14,13 +15,12 @@ export type VariantFormValues = z.infer<typeof variantFormSchema>
 
 interface UseVariantProps {
   subcategoryId: number | string
-  subcategoryName?: string
   itemToEdit?: { id: number; name: string; price: string | number; status: string }
-  onSuccess?: () => void
 }
 
-export function useVariant({ subcategoryId, subcategoryName, itemToEdit, onSuccess }: UseVariantProps) {
+export function useVariant({ subcategoryId, itemToEdit }: UseVariantProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const queryClient = useQueryClient()
 
   const form = useForm<VariantFormValues>({
     resolver: zodResolver(variantFormSchema),
@@ -31,50 +31,51 @@ export function useVariant({ subcategoryId, subcategoryName, itemToEdit, onSucce
     },
   })
 
-  const { isSubmitting } = form.formState
+  const saveVariantMutation = useMutation({
+    mutationFn: async (values: VariantFormValues) => {
+      if (itemToEdit) {
+        const response = await apiClient.put(`/inventory/products/${itemToEdit.id}/`, {
+          ...values,
+          subcategory: subcategoryId
+        })
+        return response.data
+      } else {
+        const response = await apiClient.post('/inventory/products/', {
+          ...values,
+          subcategory: subcategoryId
+        })
+        return response.data
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['menu-categories'] })
+      queryClient.invalidateQueries({ queryKey: ['inventory-products'] })
+      setIsOpen(false)
+      if (!itemToEdit) {
+        form.reset()
+      }
+    },
+    onError: (error) => {
+      console.error("Error al guardar variante:", error)
+    }
+  })
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open)
-    if (!open) {
+    if (!open && !itemToEdit) {
       form.reset()
     }
   }
 
   const onSubmit = async (values: VariantFormValues) => {
-    try {
-      if (itemToEdit) {
-        console.log(`Editando variante ${itemToEdit.id}:`, values)
-        await apiClient.put(`/inventory/products/${itemToEdit.id}/`, {
-          ...values,
-          subcategory: subcategoryId
-        })
-      } else {
-        console.log(`Guardando variante en ${subcategoryName}:`, values)
-        await apiClient.post('/inventory/products/', {
-          ...values,
-          subcategory: subcategoryId
-        })
-      }
-      
-      setIsOpen(false)
-      form.reset()
-
-      if (onSuccess) {
-        onSuccess()
-      }
-    } catch (error) {
-      console.error("Error al guardar variante:", error)
-      setIsOpen(false)
-      form.reset()
-      if (onSuccess) onSuccess()
-    }
+    await saveVariantMutation.mutateAsync(values)
   }
 
   return {
     isOpen,
     setIsOpen: handleOpenChange,
     form,
-    isSubmitting,
+    isSubmitting: saveVariantMutation.isPending,
     onSubmit
   }
 }

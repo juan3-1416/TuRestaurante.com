@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { Plus } from "lucide-react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 
 import {
   Dialog,
@@ -33,13 +34,13 @@ const formSchema = z.object({
 interface SubcategoryModalProps {
   categoryId?: string
   categoryName?: string
-  onSubcategoryCreated?: () => void
   subcategoryToEdit?: { id: number; name: string }
   trigger?: React.ReactNode
 }
 
-export function SubcategoryModal({ categoryId, categoryName, onSubcategoryCreated, subcategoryToEdit, trigger }: SubcategoryModalProps) {
+export function SubcategoryModal({ categoryId, categoryName, subcategoryToEdit, trigger }: SubcategoryModalProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const queryClient = useQueryClient()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -48,42 +49,44 @@ export function SubcategoryModal({ categoryId, categoryName, onSubcategoryCreate
     },
   })
 
-  const { isSubmitting } = form.formState
-
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    try {
+  const saveSubcategoryMutation = useMutation({
+    mutationFn: async (values: z.infer<typeof formSchema>) => {
       if (subcategoryToEdit) {
-        console.log(`Actualizando subcategoría:`, values)
-        await apiClient.put(`/inventory/subcategories/${subcategoryToEdit.id}/`, values)
+        const response = await apiClient.put(`/inventory/subcategories/${subcategoryToEdit.id}/`, values)
+        return response.data
       } else {
-        console.log(`Guardando nueva subcategoría en ${categoryName}:`, values)
-        await apiClient.post('/inventory/subcategories/', {
+        const response = await apiClient.post('/inventory/subcategories/', {
           ...values,
           category: categoryId
         })
+        return response.data
       }
-      
-      // Cerramos el modal y limpiamos el formulario
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['menu-categories'] })
       setIsOpen(false)
       if (!subcategoryToEdit) {
         form.reset()
       }
-
-      // Avisamos al componente padre
-      if (onSubcategoryCreated) {
-        onSubcategoryCreated()
-      }
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error("Error al guardar subcategoría:", error)
-      // Si la URL no existe aún, para que no se bloquee el UI simulamos éxito temporal
-      setIsOpen(false)
+    }
+  })
+
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    await saveSubcategoryMutation.mutateAsync(values)
+  }
+
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open)
+    if (!open && !subcategoryToEdit) {
       form.reset()
-      if (onSubcategoryCreated) onSubcategoryCreated()
     }
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger ? (
           trigger
@@ -120,7 +123,7 @@ export function SubcategoryModal({ categoryId, categoryName, onSubcategoryCreate
                   <FormControl>
                     <Input 
                       placeholder="Ej. Platos Principales, Sopas..." 
-                      disabled={isSubmitting} 
+                      disabled={saveSubcategoryMutation.isPending} 
                       className="h-11 px-4 bg-white/60 border border-gray-200/70 rounded-xl text-base transition-all duration-200 focus:bg-white focus:border-restaurante-acento focus:ring-2 focus:ring-restaurante-acento/15 disabled:cursor-not-allowed disabled:opacity-60"
                       {...field} 
                     />
@@ -133,7 +136,7 @@ export function SubcategoryModal({ categoryId, categoryName, onSubcategoryCreate
             <div className="pt-6 flex justify-end">
               <LoadingButton 
                 type="submit" 
-                isLoading={isSubmitting}
+                isLoading={saveSubcategoryMutation.isPending}
                 loadingText={subcategoryToEdit ? "Guardando..." : "Creando..."}
                 className="w-full sm:w-auto h-11 px-7 bg-linear-to-r from-restaurante-primario to-restaurante-acento hover:from-restaurante-oscuro hover:to-restaurante-primario text-white text-base font-semibold rounded-xl transition-all duration-300 shadow-md shadow-restaurante-primario/30 hover:shadow-lg hover:shadow-restaurante-oscuro/35 hover:scale-[1.02] active:scale-[0.98]"
               >

@@ -12,7 +12,7 @@ import {
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/shared/components/LoadingButton"
-import { usePosStore } from "@/store/posStore"
+import { useShift } from "../hooks/useShift"
 
 const openShiftSchema = z.object({
   initialBalance: z.number().min(0, { message: "El fondo no puede ser negativo." }),
@@ -20,7 +20,7 @@ const openShiftSchema = z.object({
 
 export function OpenShiftModal() {
   const [isOpen, setIsOpen] = useState(false)
-  const toggleShift = usePosStore((state) => state.toggleShift)
+  const { openShift } = useShift()
 
   const form = useForm<z.infer<typeof openShiftSchema>>({
     resolver: zodResolver(openShiftSchema),
@@ -33,8 +33,8 @@ export function OpenShiftModal() {
     try {
       await new Promise((resolve) => setTimeout(resolve, 800))
       
-      // Abrimos el turno pasándole el monto ingresado
-      toggleShift(true, values.initialBalance)
+      // Abrimos el turno pasándole el monto ingresado a la API
+      await openShift.mutateAsync({ initial_balance: values.initialBalance })
       
       setIsOpen(false)
       form.reset()

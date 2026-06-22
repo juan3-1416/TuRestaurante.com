@@ -5,7 +5,8 @@ import { Lock, FileText, ArrowUpRight, ArrowDownRight, Wallet } from "lucide-rea
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { LoadingButton } from "@/shared/components/LoadingButton"
-import { usePosStore } from "@/store/posStore"
+import { useShift } from "../hooks/useShift"
+import { Transaction } from "@/store/posStore"
 
 interface CloseShiftModalProps {
   cashierName: string
@@ -15,27 +16,30 @@ export function CloseShiftModal({ cashierName }: CloseShiftModalProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [isClosing, setIsClosing] = useState(false)
   
-  const { shiftInitialBalance, transactions, toggleShift } = usePosStore()
+  const { shift, closeShift } = useShift()
+  
+  const transactions: Transaction[] = shift?.transactions || []
+  const shiftInitialBalance = shift ? Number(shift.initial_balance) : 0
 
   const EXCHANGE_RATE = 6.96;
 
   // Cálculos del reporte
-  const income = transactions.filter(t => t.type === "income").reduce((acc, t) => acc + t.amount, 0)
-  const expenses = transactions.filter(t => t.type === "expense").reduce((acc, t) => acc + t.amount, 0)
+  const income = transactions.filter((t) => t.type === "income").reduce((acc, t) => acc + t.amount, 0)
+  const expenses = transactions.filter((t) => t.type === "expense").reduce((acc, t) => acc + t.amount, 0)
   const finalBalance = shiftInitialBalance + income - expenses
   const totalOperations = transactions.length
 
-  const incomeQR = transactions.filter(t => t.type === "income" && t.method === "QR").reduce((acc, t) => acc + t.amount, 0)
-  const incomeTarjeta = transactions.filter(t => t.type === "income" && t.method === "Tarjeta").reduce((acc, t) => acc + t.amount, 0)
-  const incomeEfectivoBs = transactions.filter(t => t.type === "income" && t.method === "Efectivo" && t.currency !== "USD").reduce((acc, t) => acc + t.amount, 0)
-  const incomeEfectivoUSD_Bs = transactions.filter(t => t.type === "income" && t.method === "Efectivo" && t.currency === "USD").reduce((acc, t) => acc + t.amount, 0)
+  const incomeQR = transactions.filter((t) => t.type === "income" && t.method === "QR").reduce((acc, t) => acc + t.amount, 0)
+  const incomeTarjeta = transactions.filter((t) => t.type === "income" && t.method === "Tarjeta").reduce((acc, t) => acc + t.amount, 0)
+  const incomeEfectivoBs = transactions.filter((t) => t.type === "income" && t.method === "Efectivo" && t.currency !== "USD").reduce((acc, t) => acc + t.amount, 0)
+  const incomeEfectivoUSD_Bs = transactions.filter((t) => t.type === "income" && t.method === "Efectivo" && t.currency === "USD").reduce((acc, t) => acc + t.amount, 0)
 
   const handleCloseShift = async () => {
     setIsClosing(true)
     await new Promise((resolve) => setTimeout(resolve, 1500)) // Simulamos generar reporte y guardado
     
-    // Cerramos el turno y la caja global (esto limpiará el historial temporal)
-    toggleShift(false)
+    // Cerramos el turno y la caja global en el backend
+    await closeShift.mutateAsync()
     setIsClosing(false)
     setIsOpen(false)
   }

@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
 import { Plus } from "lucide-react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 
 import {
   Dialog,
@@ -32,13 +33,13 @@ const formSchema = z.object({
 })
 
 interface CategoryModalProps {
-  onCategoryCreated?: () => void
   categoryToEdit?: { id: string; name: string; icon: string }
   trigger?: React.ReactNode
 }
 
-export function CategoryModal({ onCategoryCreated, categoryToEdit, trigger }: CategoryModalProps) {
+export function CategoryModal({ categoryToEdit, trigger }: CategoryModalProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const queryClient = useQueryClient()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -48,40 +49,46 @@ export function CategoryModal({ onCategoryCreated, categoryToEdit, trigger }: Ca
     },
   })
 
-  const { isSubmitting } = form.formState
-
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    try {
+  const saveCategoryMutation = useMutation({
+    mutationFn: async (values: z.infer<typeof formSchema>) => {
       if (categoryToEdit) {
-        console.log("Actualizando categoría:", values)
-        await apiClient.put(`/inventory/categories/${categoryToEdit.id}/`, values)
+        const response = await apiClient.put(`/inventory/categories/${categoryToEdit.id}/`, values)
+        return response.data
       } else {
-        console.log("Guardando nueva categoría:", values)
-        await apiClient.post('/inventory/categories/', values)
+        const response = await apiClient.post('/inventory/categories/', values)
+        return response.data
       }
-      
-      // Cerramos el modal y limpiamos el formulario si fue exitoso
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['menu-categories'] })
       setIsOpen(false)
       if (!categoryToEdit) {
         form.reset()
       }
+    },
+    onError: (error) => {
+      console.error("Error al guardar categoría:", error)
+    }
+  })
 
-      // Avisamos al componente padre que recargue las categorías
-      if (onCategoryCreated) {
-        onCategoryCreated()
-      }
-    } catch (error) {
-      console.error("Error al guardar:", error)
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    await saveCategoryMutation.mutateAsync(values)
+  }
+
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open)
+    if (!open && !categoryToEdit) {
+      form.reset()
     }
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger ? (
           trigger
         ) : (
-          <button className="flex items-center bg-restaurante-primario hover:bg-restaurante-acento text-white rounded-2xl px-6 py-2 transition-colors font-medium">
+          <button className="flex items-center bg-restaurante-primario hover:bg-restaurante-acento text-white rounded-2xl px-6 py-2 font-medium shadow-md shadow-restaurante-primario/20 transition-all hover:-translate-y-0.5">
             <Plus className="mr-2 h-4 w-4" /> Nueva Categoría
           </button>
         )}
@@ -110,7 +117,7 @@ export function CategoryModal({ onCategoryCreated, categoryToEdit, trigger }: Ca
                   <FormControl>
                     <Input 
                       placeholder="Ej. Bebidas, Postres..." 
-                      disabled={isSubmitting} 
+                      disabled={saveCategoryMutation.isPending} 
                       className="h-11 px-4 bg-white/60 border border-gray-200/70 rounded-xl text-base transition-all duration-200 focus:bg-white focus:border-restaurante-acento focus:ring-2 focus:ring-restaurante-acento/15 disabled:cursor-not-allowed disabled:opacity-60"
                       {...field} 
                     />
@@ -129,7 +136,7 @@ export function CategoryModal({ onCategoryCreated, categoryToEdit, trigger }: Ca
                   <FormLabel className="text-sm font-semibold text-restaurante-oscuro/90">Icono representativo</FormLabel>
                   <FormControl>
                     <select 
-                      disabled={isSubmitting}
+                      disabled={saveCategoryMutation.isPending}
                       className="flex h-11 w-full rounded-xl border border-gray-200/70 bg-white/60 px-4 py-2 text-base transition-all duration-200 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-restaurante-acento/15 focus-visible:border-restaurante-acento focus-visible:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                       {...field}
                     >
@@ -147,7 +154,7 @@ export function CategoryModal({ onCategoryCreated, categoryToEdit, trigger }: Ca
             <div className="pt-6 flex justify-end">
               <LoadingButton 
                 type="submit" 
-                isLoading={isSubmitting}
+                isLoading={saveCategoryMutation.isPending}
                 loadingText={categoryToEdit ? "Guardando..." : "Creando..."}
                 className="w-full sm:w-auto h-11 px-7 bg-linear-to-r from-restaurante-primario to-restaurante-acento hover:from-restaurante-oscuro hover:to-restaurante-primario text-white text-base font-semibold rounded-xl transition-all duration-300 shadow-md shadow-restaurante-primario/30 hover:shadow-lg hover:shadow-restaurante-oscuro/35 hover:scale-[1.02] active:scale-[0.98]"
               >

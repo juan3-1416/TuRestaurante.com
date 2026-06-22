@@ -41,24 +41,24 @@ export function PerfilDashboard() {
           <div className="flex flex-col items-center text-center space-y-3">
             <div className="w-16 h-16 bg-linear-to-tr from-restaurante-primario to-restaurante-acento rounded-[1.5rem] flex items-center justify-center shadow-lg shadow-restaurante-primario/30 transform rotate-3 hover:rotate-0 transition-transform">
               <span className="text-3xl font-black text-white drop-shadow-md">
-                {user.name ? user.name.charAt(0).toUpperCase() : "U"}
+                {user.first_name ? user.first_name.charAt(0).toUpperCase() : "U"}
               </span>
             </div>
             <div className="pt-1">
-              <h2 className="text-xl font-black text-restaurante-oscuro tracking-tight">{user.name}</h2>
+              <h2 className="text-xl font-black text-restaurante-oscuro tracking-tight">{user.first_name} {user.last_name}</h2>
               <p className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-1 rounded-lg inline-block mt-1 border border-gray-200 shadow-inner">
                 @{user.username}
               </p>
             </div>
             <span className="px-3 py-1.5 rounded-lg bg-restaurante-primario/10 text-restaurante-primario text-xs font-bold uppercase tracking-widest flex items-center gap-1.5">
-              <ShieldCheck size={14} /> {user.role}
+              <ShieldCheck size={14} /> {user.role === "ADMIN" ? "Administrador" : user.role === "CASHIER" ? "Cajero" : "Mesero"}
             </span>
           </div>
 
           <div className="mt-5 space-y-3 border-t border-gray-100 pt-5">
             <div className="flex items-center gap-2 text-sm text-gray-600 bg-white/50 p-2 rounded-xl border border-white shadow-sm hover:bg-white transition-colors">
               <div className="p-1.5 bg-gray-100 rounded-lg shrink-0"><Phone size={16} className="text-gray-500" /></div>
-              <span className="font-medium wrap-break-word leading-tight">{user.phone || "Teléfono no registrado"}</span>
+              <span className="font-medium wrap-break-word leading-tight">{user.phone_number || "Teléfono no registrado"}</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-600 bg-white/50 p-2 rounded-xl border border-white shadow-sm hover:bg-white transition-colors">
               <div className="p-1.5 bg-gray-100 rounded-lg shrink-0"><MapPin size={16} className="text-gray-500" /></div>
@@ -66,7 +66,7 @@ export function PerfilDashboard() {
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-600 bg-white/50 p-2 rounded-xl border border-white shadow-sm hover:bg-white transition-colors">
               <div className="p-1.5 bg-gray-100 rounded-lg shrink-0"><CreditCard size={16} className="text-gray-500" /></div>
-              <span className="font-medium font-mono tracking-wider">{user.accountNumber || "Sin cuenta bancaria"}</span>
+              <span className="font-medium font-mono tracking-wider">{user.bank_account_number || "Sin cuenta bancaria"}</span>
             </div>
           </div>
         </div>

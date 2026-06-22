@@ -16,3 +16,43 @@ apiClient.interceptors.request.use((config) => {
     }
     return config;
 })
+
+// Interceptor para refrescar el token si caduca
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
+
+      if (refreshToken) {
+        try {
+          const response = await axios.post(`${apiClient.defaults.baseURL}/users/token/refresh/`, {
+            refresh: refreshToken,
+          });
+
+          const newAccessToken = response.data.access;
+          localStorage.setItem('jwt_token', newAccessToken);
+          
+          if (response.data.refresh) {
+            localStorage.setItem('refresh_token', response.data.refresh);
+          }
+
+          originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+          return apiClient(originalRequest);
+        } catch {
+          // Si el refresh token caducó o es inválido, cerramos sesión
+          localStorage.removeItem('jwt_token');
+          localStorage.removeItem('refresh_token');
+          localStorage.removeItem('user_info');
+          if (typeof window !== 'undefined') {
+            window.location.href = '/login';
+          }
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);

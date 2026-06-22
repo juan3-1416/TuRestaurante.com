@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { 
@@ -20,16 +20,28 @@ export function Sidebar() {
   }
   
   const menuItems: { name: string; icon: LucideIcon; path: string; disabled?: boolean; roles: Role[] }[] = [
-    { name: "Menú y Platillos", icon: UtensilsCrossed, path: "/dashboard", roles: ["Admin"] },
-    { name: "Mapa de Mesas", icon: LayoutGrid, path: "/pos/mesas", roles: ["Admin", "Cajero", "Mesero"] },
-    { name: "Caja", icon: Wallet, path: "/caja", roles: ["Admin", "Cajero"] },
-    { name: "Usuarios", icon: Users, path: "/admin/usuarios", roles: ["Admin"] }, 
-    { name: "Mi Perfil", icon: UserCircle, path: "/perfil", roles: ["Admin", "Cajero", "Mesero"] }, 
-    { name: "Reportes IA", icon: BarChart3, path: "#", disabled: true, roles: ["Admin"] },
+    { name: "Menú y Platillos", icon: UtensilsCrossed, path: "/dashboard", roles: ["ADMIN"] },
+    { name: "Mapa de Mesas", icon: LayoutGrid, path: "/pos/mesas", roles: ["ADMIN", "CASHIER", "WAITER"] },
+    { name: "Caja", icon: Wallet, path: "/caja", roles: ["ADMIN", "CASHIER"] },
+    { name: "Usuarios", icon: Users, path: "/admin/usuarios", roles: ["ADMIN"] }, 
+    { name: "Mi Perfil", icon: UserCircle, path: "/perfil", roles: ["ADMIN", "CASHIER", "WAITER"] }, 
+    { name: "Reportes IA", icon: BarChart3, path: "#", disabled: true, roles: ["ADMIN"] },
   ]
 
+  // Usamos useEffect para evitar errores de hidratación (SSR vs Client)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setMounted(true), 0)
+    return () => clearTimeout(timer)
+  }, [])
+
   // Filtramos el menú según el rol del usuario conectado
-  const filteredMenu = menuItems.filter(item => user?.role && item.roles.includes(user.role))
+  // Convertimos todo a minúsculas para evitar problemas de capitalización
+  const filteredMenu = menuItems.filter(item => 
+    user?.role && item.roles.map(r => r.toLowerCase()).includes(user.role.toLowerCase())
+  )
+
+  if (!mounted) return null // Evita mostrar la versión SSR sin datos locales
 
   return (
     <aside 

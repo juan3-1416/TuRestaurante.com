@@ -20,7 +20,7 @@ export function MenuManager() {
   const {
     categories, isLoading,
     openSections, openSubcategories,
-    fetchMenu, toggleSection,
+    toggleSection,
     toggleSubcategory, handleDeleteProduct,
     handleDeleteCategory, handleDeleteSubcategory,
   } = useMenuManager()
@@ -32,7 +32,7 @@ export function MenuManager() {
           <h2 className="text-2xl font-bold text-restaurante-oscuro">Administración de Carta</h2>
           <p className="text-gray-600 text-sm">Gestiona categorías, variantes y precios</p>
         </div>
-        <CategoryModal onCategoryCreated={fetchMenu} />
+        <CategoryModal />
       </div>
 
       <div className="grid gap-4">
@@ -65,7 +65,6 @@ export function MenuManager() {
                 <div className="flex items-center gap-2">
                   <CategoryModal
                     categoryToEdit={cat}
-                    onCategoryCreated={fetchMenu}
                     trigger={
                       <button className="p-2 hover:bg-white/20 rounded-lg transition-colors">
                         <Edit2 size={18} />
@@ -117,7 +116,6 @@ export function MenuManager() {
                               subcategoryToEdit={sub}
                               categoryId={cat.id.toString()}
                               categoryName={cat.name}
-                              onSubcategoryCreated={fetchMenu}
                               trigger={
                                 <button className="p-1.5 hover:bg-white rounded-lg text-gray-400 hover:text-restaurante-acento transition-colors">
                                   <Edit2 size={16} />
@@ -133,7 +131,6 @@ export function MenuManager() {
                             <VariantModal 
                               subcategoryId={sub.id} 
                               subcategoryName={sub.name} 
-                              onSuccess={fetchMenu} 
                             />
                           </div>
                         </div>
@@ -159,7 +156,6 @@ export function MenuManager() {
                                       <div className="flex gap-1">
                                         <VariantModal
                                           subcategoryId={sub.id}
-                                          onSuccess={fetchMenu}
                                           itemToEdit={item}
                                           trigger={
                                             <button className="p-1.5 hover:bg-white rounded-lg text-gray-400 hover:text-restaurante-acento transition-colors">
@@ -189,7 +185,6 @@ export function MenuManager() {
                     <SubcategoryModal 
                       categoryId={cat.id.toString()} 
                       categoryName={cat.name} 
-                      onSubcategoryCreated={fetchMenu} 
                     />
                   </div>
                 </div>

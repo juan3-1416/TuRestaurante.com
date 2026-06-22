@@ -1,4 +1,5 @@
-import { useState, useEffect, useMemo, Dispatch, SetStateAction } from "react"
+import { useState, useMemo, Dispatch, SetStateAction } from "react"
+import { useQuery } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
 
 export interface ApiProduct {
@@ -6,6 +7,7 @@ export interface ApiProduct {
   name: string;
   price: string | number;
   category_name?: string;
+  status?: string;
 }
 
 export interface Product {
@@ -14,6 +16,7 @@ export interface Product {
   price: number;
   category: string;
   cartId?: string; // Añadido para identificar cada unidad de forma única en el carrito
+  status?: string;
 }
 
 interface UseTableProductMenuProps {
@@ -22,30 +25,30 @@ interface UseTableProductMenuProps {
 }
 
 export function useTableProductMenu({ selectedProducts, setSelectedProducts }: UseTableProductMenuProps) {
-  const [products, setProducts] = useState<Product[]>([])
   const [selectedCategory, setSelectedCategory] = useState<string>("Todos")
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const res = await apiClient.get('/inventory/products/')
-        // Transform incoming data to match expected Product interface
-        const mappedProducts = res.data.map((p: ApiProduct) => ({
-          id: p.id,
-          name: p.name,
-          price: typeof p.price === 'string' ? parseFloat(p.price) : Number(p.price),
-          category: p.category_name || "General"
-        }))
-        setProducts(mappedProducts)
-      } catch (err) {
-        console.error("Error fetching products", err)
-      }
+  const { data: products = [], isLoading } = useQuery<Product[]>({
+    queryKey: ['inventory-products'],
+    queryFn: async () => {
+      const res = await apiClient.get('/inventory/products/')
+      // Transform incoming data to match expected Product interface
+      return res.data.map((p: ApiProduct) => ({
+        id: p.id,
+        name: p.name,
+        price: typeof p.price === 'string' ? parseFloat(p.price) : Number(p.price),
+        category: p.category_name || "General",
+        status: p.status || "Disponible"
+      }))
     }
-    fetchProducts()
-  }, [])
+  })
 
   // Función para agregar un producto generando una instancia única
   const handleAddProduct = (product: Product) => {
+    // Si el estado es "Agotado", podríamos prevenir que lo agreguen, pero lo dejaremos así por ahora o mostramos una alerta
+    if (product.status === "Agotado") {
+      alert("Este producto está agotado actualmente.")
+      return;
+    }
     const newProductInstance = {
       ...product,
       cartId: crypto.randomUUID() // Genera un ID único para esta unidad específica
@@ -98,6 +101,7 @@ export function useTableProductMenu({ selectedProducts, setSelectedProducts }: U
     cartItems,
     handleAddProduct,
     handleRemoveProduct,
-    handleRemoveAllOfProduct
+    handleRemoveAllOfProduct,
+    isLoadingProducts: isLoading
   }
 }

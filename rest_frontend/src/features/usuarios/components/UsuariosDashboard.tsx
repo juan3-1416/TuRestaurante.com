@@ -1,6 +1,6 @@
 "use client"
 
-import { Users, Search, ShieldAlert, UserCog, Coffee, Edit2, UserMinus, UserCheck } from "lucide-react"
+import { Users, Search, ShieldAlert, UserCog, Coffee, Edit2, UserMinus, UserCheck, Loader2 } from "lucide-react"
 import { Role } from "@/store/authStore"
 import { CreateUserModal } from "./CreateUserModal"
 import { EditUserModal } from "./EditUserModal"
@@ -9,22 +9,21 @@ import { useUsuarios } from "../hooks/useUsuarios"
 
 export function UsuariosDashboard() {
   const {
-    paginatedEmpleados, filteredCount,
+    paginatedUsers, filteredCount, isLoading,
     searchTerm, statusFilter,
     currentPage, totalPages, ITEMS_PER_PAGE,
     userToEdit, setUserToEdit,
     handleSearchChange, handleStatusFilterChange,
-    handleUserCreated, handleUserEdited, 
     handleToggleStatus, setCurrentPage
   } = useUsuarios()
 
   const getRoleBadge = (role: Role) => {
     switch (role) {
-      case "Admin":
+      case "ADMIN":
         return <span className="flex w-max items-center gap-1.5 px-3 py-1 rounded-lg bg-purple-100 text-purple-700 font-black text-xs uppercase tracking-wider"><ShieldAlert size={14} /> Admin</span>
-      case "Cajero":
+      case "CASHIER":
         return <span className="flex w-max items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-100 text-blue-700 font-black text-xs uppercase tracking-wider"><UserCog size={14} /> Cajero</span>
-      case "Mesero":
+      case "WAITER":
         return <span className="flex w-max items-center gap-1.5 px-3 py-1 rounded-lg bg-orange-100 text-orange-700 font-black text-xs uppercase tracking-wider"><Coffee size={14} /> Mesero</span>
     }
   }
@@ -45,7 +44,7 @@ export function UsuariosDashboard() {
           </p>
         </div>
 
-        <CreateUserModal onUserCreated={handleUserCreated} />
+        <CreateUserModal />
       </div>
 
       <div className="bg-white/40 backdrop-blur-2xl border border-white/60 shadow-xl shadow-gray-200/50 rounded-[2.5rem] overflow-hidden">
@@ -87,7 +86,7 @@ export function UsuariosDashboard() {
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+          <table className="w-full text-left border-collapse min-w-[800px]">
             <thead>
               <tr className="bg-gray-50/50 border-b border-gray-200/50">
                 <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Nombre Completo</th>
@@ -98,53 +97,66 @@ export function UsuariosDashboard() {
               </tr>
             </thead>
             <tbody>
-              {paginatedEmpleados.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-restaurante-primario font-bold">
+                    <Loader2 className="animate-spin inline-block mr-2" size={24} />
+                    Cargando usuarios...
+                  </td>
+                </tr>
+              ) : paginatedUsers.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center text-gray-500 font-medium italic">
                     No se encontraron usuarios {statusFilter === "Inactivo" ? "inactivos" : "activos"}{searchTerm ? " con ese término de búsqueda" : ""}.
                   </td>
                 </tr>
               ) : (
-                paginatedEmpleados.map((emp) => (
-                  <tr key={emp.id} className={`border-b border-white/40 transition-colors group ${emp.status === "Inactivo" ? "bg-gray-50/30 opacity-75" : "hover:bg-white/60"}`}>
-                    <td className="px-6 py-5 font-bold text-restaurante-oscuro">{emp.name}</td>
-                    <td className="py-5 font-mono text-sm text-gray-600 bg-gray-50/50 rounded-lg my-2 inline-block px-3 ml-6 border border-gray-100">
-                      @{emp.username}
-                    </td>
-                    <td className="px-6 py-5">{getRoleBadge(emp.role)}</td>
-                    <td className="px-6 py-5">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold border shadow-sm ${
-                        emp.status === "Activo" 
-                        ? "bg-green-100 text-green-700 border-green-200" 
-                        : "bg-red-100 text-red-700 border-red-200"
-                      }`}>
-                        {emp.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button 
-                          onClick={() => setUserToEdit(emp)}
-                          className="p-2 rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-restaurante-primario hover:border-restaurante-primario/30 hover:bg-restaurante-primario/5 transition-all shadow-sm"
-                          title="Editar Usuario">
-                          <Edit2 size={16} />
-                        </button>
-                        
-                        <button 
-                          onClick={() => handleToggleStatus(emp.id)}
-                          className={`p-2 rounded-xl border transition-all shadow-sm ${
-                            emp.status === "Activo"
-                            ? "bg-white border-red-100 text-red-400 hover:text-white hover:bg-red-500"
-                            : "bg-white border-green-100 text-green-500 hover:text-white hover:bg-green-500"
-                          }`}
-                          title={emp.status === "Activo" ? "Desactivar Usuario" : "Activar Usuario"}
-                        >
-                          {emp.status === "Activo" ? <UserMinus size={16} /> : <UserCheck size={16} />}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                paginatedUsers.map((emp) => {
+                  const currentStatus = emp.is_active !== false ? "Activo" : "Inactivo";
+                  
+                  return (
+                    <tr key={emp.id} className={`border-b border-white/40 transition-colors group ${currentStatus === "Inactivo" ? "bg-gray-50/30 opacity-75" : "hover:bg-white/60"}`}>
+                      <td className="px-6 py-5 font-bold text-restaurante-oscuro">
+                        {emp.first_name} {emp.last_name}
+                      </td>
+                      <td className="py-5 font-mono text-sm text-gray-600 bg-gray-50/50 rounded-lg my-2 inline-block px-3 ml-6 border border-gray-100">
+                        @{emp.username}
+                      </td>
+                      <td className="px-6 py-5">{getRoleBadge(emp.role)}</td>
+                      <td className="px-6 py-5">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold border shadow-sm ${
+                          currentStatus === "Activo" 
+                          ? "bg-green-100 text-green-700 border-green-200" 
+                          : "bg-red-100 text-red-700 border-red-200"
+                        }`}>
+                          {currentStatus}
+                        </span>
+                      </td>
+                      <td className="px-6 py-5 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button 
+                            onClick={() => setUserToEdit(emp)}
+                            className="p-2 rounded-xl bg-white border border-gray-200 text-gray-500 hover:text-restaurante-primario hover:border-restaurante-primario/30 hover:bg-restaurante-primario/5 transition-all shadow-sm"
+                            title="Editar Usuario">
+                            <Edit2 size={16} />
+                          </button>
+                          
+                          <button 
+                            onClick={() => handleToggleStatus(emp.id!, currentStatus)}
+                            className={`p-2 rounded-xl border transition-all shadow-sm ${
+                              currentStatus === "Activo"
+                              ? "bg-white border-red-100 text-red-400 hover:text-white hover:bg-red-500"
+                              : "bg-white border-green-100 text-green-500 hover:text-white hover:bg-green-500"
+                            }`}
+                            title={currentStatus === "Activo" ? "Desactivar Usuario" : "Activar Usuario"}
+                          >
+                            {currentStatus === "Activo" ? <UserMinus size={16} /> : <UserCheck size={16} />}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>
@@ -159,12 +171,10 @@ export function UsuariosDashboard() {
         />
       </div>
 
-      {/* Renderizamos el Modal de Edición que se mostrará solo si hay un usuario seleccionado */}
       <EditUserModal 
         userToEdit={userToEdit}
         isOpen={!!userToEdit}
         onClose={() => setUserToEdit(null)}
-        onUserEdited={handleUserEdited}
       />
     </div>
   )
