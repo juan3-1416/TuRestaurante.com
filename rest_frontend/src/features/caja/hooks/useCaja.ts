@@ -85,8 +85,14 @@ export function useCaja() {
     await new Promise(resolve => setTimeout(resolve, 1000))
     
     try {
-      // 1. Petición al Backend para cobrar la orden
-      const orderId = selectedTableForPayment.orders?.[0]?.orderId || selectedTableForPayment.id;
+      // 1. Usar el ID real de la orden del backend para cobrar
+      const orderId = selectedTableForPayment.activeOrderId;
+      
+      if (!orderId) {
+        alert("No se encontró una orden activa para esta mesa. Verifica que se hayan enviado productos a cocina.");
+        setIsProcessingPayment(false);
+        return;
+      }
       
       await apiClient.post(`/orders/${orderId}/pay/`, {
         payment_method: paymentMethod,

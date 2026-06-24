@@ -83,6 +83,7 @@ class TableViewSet(viewsets.ModelViewSet):
                         product_counts[p_id] = {'qty': 0, 'price': price}
                     product_counts[p_id]['qty'] += 1
                 
+                new_total = 0
                 for p_id, info in product_counts.items():
                     product = Product.objects.filter(id=p_id).first()
                     if product:
@@ -92,6 +93,11 @@ class TableViewSet(viewsets.ModelViewSet):
                             quantity=info['qty'],
                             price=info['price']
                         )
+                        new_total += float(info['price']) * info['qty']
+                
+                # Actualizar el total de la orden con el monto calculado
+                order.total = new_total
+                order.save()
 
         elif new_status == 'Libre':
             order = table.orders.filter(status='Pendiente').first()

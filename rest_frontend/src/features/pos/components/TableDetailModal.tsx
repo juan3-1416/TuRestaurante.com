@@ -1,6 +1,6 @@
 "use client"
 
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription } from "@/components/ui/dialog"
 import { useState } from "react"
 import { Table, OrderItem } from "@/store/posStore"
 import { TableStatusDetail } from "./TableStatusDetail"
@@ -80,9 +80,11 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
       const mapped = (table.orders || [])
         .filter(o => (o.orderId || "Orden 1") === ticketId)
         .map((o): Product => ({
-          id: typeof o.productId === 'number' ? o.productId : parseInt(String(o.productId)) || 0,
+          // Items del backend: { id (product_id), name, price, cartId }
+          // Items del frontend: { productId, id, name, price, cartId, orderId }
+          id: typeof o.id === 'number' ? o.id : (typeof o.productId === 'number' ? o.productId : parseInt(String(o.id || o.productId)) || 0),
           name: o.name,
-          price: o.price,
+          price: Number(o.price) || 0,
           category: "General",
           cartId: o.cartId
         }))
@@ -91,21 +93,37 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
     } else if (actionName === "Enviar a Cocina" || actionName === "Solo Modificar") {
       
       let finalOrders: OrderItem[] = [];
-      const newTicketId = orderMode === "append" ? (editingTicketId || crypto.randomUUID()) : (editingTicketId || "Orden 1");
 
+      // Mapeamos los productos NUEVOS del carrito
+      // Cada nuevo pedido tiene su propio UUID como orderId (pedido independiente)
       const newMappedOrders = selectedProducts.map((p): OrderItem => ({
         cartId: p.cartId || crypto.randomUUID(),
-        orderId: newTicketId,
+        orderId: editingTicketId || crypto.randomUUID(),
         productId: p.id,
+        id: p.id, // El backend usa prod.get('id') para identificar el producto
         name: p.name,
         price: p.price
       }));
 
-      // Si es "Nueva Orden", sumamos el historial con lo nuevo. Si es "Modificar", reemplazamos solo ese ticket.
       if (orderMode === "append") {
-        finalOrders = [...(table.orders || []), ...newMappedOrders];
+        // Modo Agregar: los items existentes se mantienen con su orderId original.
+        // Los del backend no tienen orderId (quedan como "Orden 1").
+        // Los nuevos tienen su propio UUID -> se muestran como un pedido separado.
+        const existingWithId = (table.orders || []).map((o): OrderItem => ({
+          ...o,
+          productId: o.id || o.productId, // Asegurar que el backend recibe el id correcto
+          id: o.id || o.productId,
+        }));
+        finalOrders = [...existingWithId, ...newMappedOrders];
       } else {
-        const otherOrders = (table.orders || []).filter(o => (o.orderId || "Orden 1") !== newTicketId);
+        // Modo Editar: reemplazamos solo los items del ticket editado
+        const otherOrders = (table.orders || [])
+          .filter(o => (o.orderId || "Orden 1") !== (editingTicketId || "Orden 1"))
+          .map((o): OrderItem => ({
+            ...o,
+            productId: o.id || o.productId,
+            id: o.id || o.productId,
+          }));
         finalOrders = [...otherOrders, ...newMappedOrders];
       }
       
@@ -127,7 +145,8 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       {/* Se incrementó el max-w a 600px para mayor claridad visual */}
-      <DialogContent className={`bg-white/90 backdrop-blur-3xl border-white/50 shadow-2xl rounded-[2.5rem] p-0 overflow-hidden flex flex-col transition-all duration-500 ease-in-out ${viewMode === 'products' ? 'sm:max-w-[1000px] h-[85vh]' : 'sm:max-w-[600px] max-h-[90vh]'}`}>
+      <DialogContent aria-describedby={undefined} className={`bg-white/90 backdrop-blur-3xl border-white/50 shadow-2xl rounded-[2.5rem] p-0 overflow-hidden flex flex-col transition-all duration-500 ease-in-out ${viewMode === 'products' ? 'sm:max-w-[1000px] h-[85vh]' : 'sm:max-w-[600px] max-h-[90vh]'}`}>
+        <DialogDescription className="sr-only">Detalles de la mesa y gestión de pedidos</DialogDescription>
         <div className={`h-32 w-full absolute top-0 left-0 -z-10 opacity-30 ${
           table.status === 'Libre' ? 'bg-linear-to-b from-green-300 to-transparent' :
           table.status === 'Ocupada' ? 'bg-linear-to-b from-red-300 to-transparent' :

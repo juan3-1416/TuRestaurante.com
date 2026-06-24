@@ -7,6 +7,7 @@ export interface OrderItem {
   cartId: string;
   orderId?: string;
   productId: number | string;
+  id?: number | string; // Backend expects 'id' as product id
   name: string;
   price: number;
 }
@@ -20,6 +21,7 @@ export interface Table {
   activeTime?: string
   customerName?: string
   orders?: OrderItem[]
+  activeOrderId?: number | string | null // ID real de la orden en el backend
 }
 
 export interface Transaction {

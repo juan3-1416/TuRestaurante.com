@@ -18,6 +18,7 @@ export function useTables() {
       const fetchedTables = response.data;
       return fetchedTables.map((t) => ({
         ...t,
+        activeOrderId: t.activeOrderId ?? null,
         currentTotal: t.currentTotal !== undefined 
           ? t.currentTotal 
           : (t.orders || []).reduce((acc: number, item: OrderItem) => acc + (Number(item.price) || 0), 0)
@@ -27,7 +28,7 @@ export function useTables() {
 
   const createTable = useMutation({
     mutationFn: async ({ number, capacity }: { number: number; capacity: number }) => {
-      const response = await apiClient.post("/tables/", { number, capacity, status: "Libre" });
+      const response = await apiClient.post("/tables/", { table_number: number, capacity, status: "Libre" });
       return response.data;
     },
     onSuccess: () => {
@@ -44,7 +45,7 @@ export function useTables() {
 
   const editTable = useMutation({
     mutationFn: async ({ id, number, capacity }: { id: string | number; number: number; capacity: number }) => {
-      const response = await apiClient.put(`/tables/${id}/`, { number, capacity });
+      const response = await apiClient.put(`/tables/${id}/`, { table_number: number, capacity });
       return response.data;
     },
     onSuccess: () => {
@@ -84,8 +85,34 @@ export function useTables() {
       });
       return response.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tables"] });
+    // Después de actualizar, usamos setQueryData en lugar de invalidateQueries.
+    // Razón: invalidateQueries hace refetch del backend, que devuelve los items SIN orderId,
+    // perdiendo la agrupación de pedidos independientes.
+    // Con setQueryData actualizamos el caché manualmente preservando el orderId de cada pedido.
+    onSuccess: (responseData, variables) => {
+      queryClient.setQueryData<Table[]>(["tables"], (oldTables) => {
+        if (!oldTables) return oldTables;
+
+        // El backend devuelve { status: "...", table: { currentTotal, activeOrderId, ... } }
+        const backendTable = responseData?.table;
+
+        return oldTables.map((t: Table) => {
+          if (String(t.id) === String(variables.id)) {
+            return {
+              ...t,
+              status: variables.status,
+              customerName: variables.customerName ?? t.customerName,
+              activeTime: variables.activeTime ?? t.activeTime,
+              // Usamos los orders LOCALES (con orderId intacto) en lugar de los del backend
+              orders: variables.orders !== undefined ? variables.orders : t.orders,
+              // Los totales e IDs reales los calculó el backend correctamente
+              currentTotal: backendTable?.currentTotal ?? t.currentTotal,
+              activeOrderId: backendTable?.activeOrderId ?? t.activeOrderId,
+            };
+          }
+          return t;
+        });
+      });
     },
   });
 

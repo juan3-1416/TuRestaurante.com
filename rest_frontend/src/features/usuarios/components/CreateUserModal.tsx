@@ -98,6 +98,21 @@ export function CreateUserModal() {
                 )}/> 
             </div>
 
+            <div className="grid grid-cols-1 gap-4">
+              <FormField
+                control={form.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="font-bold text-gray-700">Correo Electrónico <span className="text-gray-400 font-normal">(Opcional)</span></FormLabel>
+                    <FormControl>
+                      <Input type="email" placeholder="correo@ejemplo.com" className="bg-gray-50/50 h-11 rounded-xl focus:bg-white" disabled={isSubmitting} {...field} />
+                    </FormControl>
+                    <FormMessage className="text-xs" />
+                  </FormItem>
+                )}/>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
