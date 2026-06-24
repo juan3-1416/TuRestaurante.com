@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { LoadingButton } from "@/shared/components/LoadingButton"
 import { Table } from "@/store/posStore"
-import { EXCHANGE_RATE } from "../hooks/useCaja"
 
 interface CajaPaymentModalProps {
   selectedTableForPayment: Table | null;
@@ -19,6 +18,7 @@ interface CajaPaymentModalProps {
   tableTotalBs: number;
   tableTotalUSD: number;
   changeBs: number;
+  exchangeRate: number;
   handleConfirmPayment: () => void;
 }
 
@@ -35,6 +35,7 @@ export function CajaPaymentModal({
   tableTotalBs,
   tableTotalUSD,
   changeBs,
+  exchangeRate,
   handleConfirmPayment
 }: CajaPaymentModalProps) {
   return (
@@ -91,7 +92,7 @@ export function CajaPaymentModal({
                   <Label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center justify-between">
                     <span>2. Moneda</span>
                     {paymentCurrency === "USD" && (
-                      <span className="text-[9px] text-green-600 normal-case">(1 USD = {EXCHANGE_RATE} Bs)</span>
+                      <span className="text-[9px] text-green-600 normal-case">(1 USD = {exchangeRate} Bs)</span>
                     )}
                   </Label>
                   <div className="grid grid-cols-2 gap-2">

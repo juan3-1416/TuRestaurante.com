@@ -6,7 +6,8 @@ import { Lock, FileText, ArrowUpRight, ArrowDownRight, Wallet } from "lucide-rea
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { LoadingButton } from "@/shared/components/LoadingButton"
 import { useShift } from "../hooks/useShift"
-import { Transaction } from "@/store/posStore"
+import { useExchangeRate } from "../hooks/useExchangeRate"
+import { BackendTransaction } from "../types/cashier"
 
 interface CloseShiftModalProps {
   cashierName: string
@@ -17,22 +18,30 @@ export function CloseShiftModal({ cashierName }: CloseShiftModalProps) {
   const [isClosing, setIsClosing] = useState(false)
   
   const { shift, closeShift } = useShift()
+  const exchangeRate = useExchangeRate()
   
-  const transactions: Transaction[] = shift?.transactions || []
+  const transactions: BackendTransaction[] = shift?.transactions || []
   const shiftInitialBalance = shift ? Number(shift.initial_balance) : 0
 
-  const EXCHANGE_RATE = 6.96;
-
-  // Cálculos del reporte
-  const income = transactions.filter((t) => t.type === "income").reduce((acc, t) => acc + t.amount, 0)
-  const expenses = transactions.filter((t) => t.type === "expense").reduce((acc, t) => acc + t.amount, 0)
+  // Ingresos y gastos calculados directamente desde el backend (ya calculados en el turno)
+  const income = shift ? Number(shift.total_income || 0) : 0
+  const expenses = shift ? Number(shift.total_expense || 0) : 0   // OJO: total_expense (sin 's')
   const finalBalance = shiftInitialBalance + income - expenses
   const totalOperations = transactions.length
 
-  const incomeQR = transactions.filter((t) => t.type === "income" && t.method === "QR").reduce((acc, t) => acc + t.amount, 0)
-  const incomeTarjeta = transactions.filter((t) => t.type === "income" && t.method === "Tarjeta").reduce((acc, t) => acc + t.amount, 0)
-  const incomeEfectivoBs = transactions.filter((t) => t.type === "income" && t.method === "Efectivo" && t.currency !== "USD").reduce((acc, t) => acc + t.amount, 0)
-  const incomeEfectivoUSD_Bs = transactions.filter((t) => t.type === "income" && t.method === "Efectivo" && t.currency === "USD").reduce((acc, t) => acc + t.amount, 0)
+  // Desglose por método de pago usando el campo correcto del backend: payment_method
+  const incomeQR = transactions
+    .filter((t) => t.transaction_type === "income" && t.payment_method === "QR")
+    .reduce((acc, t) => acc + Number(t.amount), 0)
+  const incomeTarjeta = transactions
+    .filter((t) => t.transaction_type === "income" && t.payment_method === "Tarjeta")
+    .reduce((acc, t) => acc + Number(t.amount), 0)
+  const incomeEfectivoBs = transactions
+    .filter((t) => t.transaction_type === "income" && t.payment_method === "Efectivo" && (t.currency ?? "BOB") !== "USD")
+    .reduce((acc, t) => acc + Number(t.amount), 0)
+  const incomeEfectivoUSD_Bs = transactions
+    .filter((t) => t.transaction_type === "income" && t.payment_method === "Efectivo" && t.currency === "USD")
+    .reduce((acc, t) => acc + Number(t.amount), 0)
 
   const handleCloseShift = async () => {
     setIsClosing(true)
@@ -87,7 +96,7 @@ export function CloseShiftModal({ cashierName }: CloseShiftModalProps) {
                   <span>Efectivo (USD)</span>
                   <span className="font-mono flex items-center gap-1">
                     Bs. {incomeEfectivoUSD_Bs.toFixed(2)} 
-                    <span className="text-green-600/70 normal-case">(${(incomeEfectivoUSD_Bs / EXCHANGE_RATE).toFixed(2)})</span>
+                    <span className="text-green-600/70 normal-case">(${(incomeEfectivoUSD_Bs / exchangeRate).toFixed(2)})</span>
                   </span>
                 </div>
                 <div className="flex justify-between">

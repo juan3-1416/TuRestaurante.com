@@ -27,6 +27,7 @@ export function CajaDashboard() {
         income={cajaState.income}
         expenses={cajaState.expenses}
         currentTotal={cajaState.currentTotal}
+        exchangeRate={cajaState.exchangeRate}
       />
 
       {/* Mesas Pendientes de Cobro */}
@@ -56,6 +57,7 @@ export function CajaDashboard() {
         tableTotalBs={cajaState.tableTotalBs}
         tableTotalUSD={cajaState.tableTotalUSD}
         changeBs={cajaState.changeBs}
+        exchangeRate={cajaState.exchangeRate}
         handleConfirmPayment={cajaState.handleConfirmPayment}
       />
 

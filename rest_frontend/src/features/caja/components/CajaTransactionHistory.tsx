@@ -1,9 +1,9 @@
 import { FileText, DollarSign } from "lucide-react"
-import { Transaction } from "@/store/posStore"
+import { BackendTransaction } from "../types/cashier"
 
 interface CajaTransactionHistoryProps {
   isShiftOpen: boolean;
-  transactions: Transaction[];
+  transactions: BackendTransaction[];
 }
 
 export function CajaTransactionHistory({ isShiftOpen, transactions }: CajaTransactionHistoryProps) {
@@ -45,26 +45,29 @@ export function CajaTransactionHistory({ isShiftOpen, transactions }: CajaTransa
             ) : (
               transactions.map((tx) => (
                 <tr key={tx.id} className="border-b border-white/40 hover:bg-white/50 transition-colors group">
-                  <td className="px-4 py-4 text-sm font-semibold text-gray-500">{tx.time}</td>
+                  <td className="px-4 py-4 text-sm font-semibold text-gray-500">
+                    {new Date(tx.created_at).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}
+                  </td>
                   <td className="px-4 py-4 text-sm font-bold text-restaurante-oscuro">{tx.description}</td>
                   <td className="px-4 py-4 text-sm">
                     <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider ${
-                      tx.method === 'Efectivo' ? 'bg-green-100 text-green-700' :
-                      tx.method === 'QR' ? 'bg-blue-100 text-blue-700' :
+                      tx.payment_method === 'Efectivo' ? 'bg-green-100 text-green-700' :
+                      tx.payment_method === 'QR' ? 'bg-blue-100 text-blue-700' :
+                      tx.payment_method === 'N/A' ? 'bg-gray-100 text-gray-500' :
                       'bg-purple-100 text-purple-700'
                     }`}>
-                      {tx.method}
+                      {tx.payment_method}
                     </span>
                   </td>
                   <td className="px-4 py-4 text-sm font-bold text-gray-500">
-                    {tx.currency === "USD" ? (
+                    {(tx.currency ?? "BOB") === "USD" ? (
                       <span className="flex items-center gap-1 text-green-600"><DollarSign size={14}/> USD</span>
                     ) : "Bs."}
                   </td>
                   <td className={`px-4 py-4 text-right font-mono font-bold text-base ${
-                    tx.type === 'income' ? 'text-green-600' : 'text-red-500'
+                    tx.transaction_type === 'income' ? 'text-green-600' : 'text-red-500'
                   }`}>
-                    {tx.type === 'income' ? '+' : '-'} Bs. {tx.amount.toFixed(2)}
+                    {tx.transaction_type === 'income' ? '+' : '-'} Bs. {Number(tx.amount).toFixed(2)}
                   </td>
                 </tr>
               ))
