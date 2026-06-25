@@ -40,6 +40,31 @@ class Transaction(models.Model):
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices, default=PaymentMethod.NA)
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class CurrencyType(models.TextChoices):
+        BOB = 'BOB', _('Boliviano')
+        USD = 'USD', _('Dólar')
+
+    currency = models.CharField(
+        max_length=3,
+        choices=CurrencyType.choices,
+        default=CurrencyType.BOB,
+        help_text="Moneda en que se recibió el pago (BOB o USD)"
+    )
+    exchange_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=4,
+        null=True,
+        blank=True,
+        help_text="Tasa de cambio USD→BOB usada al momento del cobro"
+    )
+    amount_foreign = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Monto original en moneda extranjera (USD). Null si se pagó en BOB."
+    )
+
     class Meta:
         verbose_name = _('transacción')
         verbose_name_plural = _('transacciones')

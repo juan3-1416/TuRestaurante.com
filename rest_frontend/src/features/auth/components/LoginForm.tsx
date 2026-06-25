@@ -47,7 +47,16 @@ export function LoginForm(){
             const refreshToken = response.data.refresh;
 
             login(token, refreshToken);
-            router.push("/dashboard");
+            await useAuthStore.getState().fetchUser();
+            
+            const role = useAuthStore.getState().user?.role;
+            if (role === 'CASHIER') {
+                router.push("/caja");
+            } else if (role === 'WAITER') {
+                router.push("/pos");
+            } else {
+                router.push("/dashboard");
+            }
             
         } catch (error) {
             console.error("Error al iniciar sesión", error)

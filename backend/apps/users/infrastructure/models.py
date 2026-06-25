@@ -27,5 +27,10 @@ class User(AbstractUser):
         verbose_name = _('usuario')
         verbose_name_plural = _('usuarios')
 
+    def save(self, *args, **kwargs):
+        if self.is_superuser:
+            self.role = RoleChoices.ADMIN
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.username} - {self.get_role_display()}"
