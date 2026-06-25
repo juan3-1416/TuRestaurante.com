@@ -28,7 +28,7 @@ export function useTables() {
 
   const createTable = useMutation({
     mutationFn: async ({ number, capacity }: { number: number; capacity: number }) => {
-      const response = await apiClient.post("/tables/", { table_number: number, capacity, status: "Libre" });
+      const response = await apiClient.post("/tables/", { number: String(number), table_number: String(number), capacity, status: "Libre" });
       return response.data;
     },
     onSuccess: () => {
@@ -45,7 +45,7 @@ export function useTables() {
 
   const editTable = useMutation({
     mutationFn: async ({ id, number, capacity }: { id: string | number; number: number; capacity: number }) => {
-      const response = await apiClient.put(`/tables/${id}/`, { table_number: number, capacity });
+      const response = await apiClient.put(`/tables/${id}/`, { number: String(number), table_number: String(number), capacity });
       return response.data;
     },
     onSuccess: () => {

@@ -15,7 +15,7 @@ const ROLE_ROUTES: Record<string, Role[]> = {
 const DEFAULT_ROUTE_BY_ROLE: Record<Role, string> = {
   ADMIN: "/dashboard",
   CASHIER: "/caja",
-  WAITER: "/pos",
+  WAITER: "/pos/mesas",
 };
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {

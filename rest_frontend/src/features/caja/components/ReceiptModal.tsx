@@ -10,6 +10,10 @@ export interface ReceiptData {
   items: { name: string; qty: number; subtotal: number }[];
   total: number;
   date: string;
+  currency?: "Bs" | "USD";
+  exchangeRate?: number;
+  amountReceived?: number;
+  changeBs?: number;
 }
 
 interface ReceiptModalProps {
@@ -92,8 +96,17 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
 
           {/* Total */}
           <div className="text-right border-t-2 border-dashed border-gray-300 pt-3 mb-6">
-            <span className="text-sm font-bold mr-4">TOTAL:</span>
-            <span className="text-xl font-black">Bs. {data.total.toFixed(2)}</span>
+            <div className="flex justify-end items-center mb-1">
+              <span className="text-sm font-bold mr-4">TOTAL:</span>
+              <span className="text-xl font-black">Bs. {data.total.toFixed(2)}</span>
+            </div>
+            {data.currency === "USD" && (
+              <div className="text-xs text-gray-600 mt-2 text-right border-t border-gray-100 pt-2 space-y-0.5">
+                <p className="font-semibold text-gray-800">Pagado en Dólares (TC: {data.exchangeRate})</p>
+                <p>Recibido: USD {data.amountReceived?.toFixed(2)}</p>
+                <p>Cambio devuelto: Bs. {data.changeBs?.toFixed(2)}</p>
+              </div>
+            )}
           </div>
 
           <div className="text-center text-[10px] italic text-gray-500">

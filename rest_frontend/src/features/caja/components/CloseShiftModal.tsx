@@ -24,8 +24,8 @@ export function CloseShiftModal({ cashierName }: CloseShiftModalProps) {
   const shiftInitialBalance = shift ? Number(shift.initial_balance) : 0
 
   // Ingresos y gastos calculados directamente desde el backend (ya calculados en el turno)
-  const income = shift ? Number(shift.total_income || 0) : 0
-  const expenses = shift ? Number(shift.total_expense || 0) : 0   // OJO: total_expense (sin 's')
+  const income = transactions.reduce((acc: number, t: any) => t.transaction_type === 'income' ? acc + Number(t.amount) : acc, 0)
+  const expenses = transactions.reduce((acc: number, t: any) => t.transaction_type === 'expense' ? acc + Number(t.amount) : acc, 0)   // OJO: total_expense (sin 's')
   const finalBalance = shiftInitialBalance + income - expenses
   const totalOperations = transactions.length
 

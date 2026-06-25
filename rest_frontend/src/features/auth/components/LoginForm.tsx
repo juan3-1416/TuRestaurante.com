@@ -53,7 +53,7 @@ export function LoginForm(){
             if (role === 'CASHIER') {
                 router.push("/caja");
             } else if (role === 'WAITER') {
-                router.push("/pos");
+                router.push("/pos/mesas");
             } else {
                 router.push("/dashboard");
             }

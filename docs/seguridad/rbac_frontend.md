@@ -20,7 +20,7 @@ El sistema reconoce tres roles principales, los cuales tienen acceso estricto a 
 | --- | --- | --- |
 | **ADMIN** | `/admin`, `/caja`, `/dashboard`, `/pos`, `/perfil` | `/dashboard` |
 | **CASHIER** | `/caja`, `/pos`, `/perfil` | `/caja` |
-| **WAITER** | `/pos`, `/perfil` | `/pos` |
+| **WAITER** | `/pos`, `/perfil` | `/pos/mesas` |
 
 > *Cualquier intento de acceso a una ruta no listada en los permisos del rol activo resultará en una redirección forzada a la Ruta por Defecto correspondiente.*
 

@@ -30,11 +30,10 @@ export function useCaja() {
   const [paymentCurrency, setPaymentCurrency] = useState<"Bs" | "USD">("Bs")
   const [amountReceived, setAmountReceived] = useState<number | "">("")
 
-  // Cálculos Financieros Generales - Consumiendo API
-  // Nota: el backend devuelve "total_expense" (sin 's') y no tiene "current_balance"
-  const income = shift ? Number(shift.total_income || 0) : 0;
-  const expenses = shift ? Number(shift.total_expense || 0) : 0;  // OJO: total_expense (sin 's')
-  const currentTotal = shiftInitialBalance + income - expenses;    // Calculado en frontend (final_balance es null mientras está abierto)
+  // Cálculos Financieros Generales - Calculados dinámicamente en el frontend
+  const income = transactions.reduce((acc: number, t: any) => t.transaction_type === 'income' ? acc + Number(t.amount) : acc, 0);
+  const expenses = transactions.reduce((acc: number, t: any) => t.transaction_type === 'expense' ? acc + Number(t.amount) : acc, 0);
+  const currentTotal = shiftInitialBalance + income - expenses;
   const pendingTables = tables.filter(t => t.status === "Ocupada" && (t.currentTotal || 0) > 0)
 
   // Cálculos Específicos del Modal de Cobro
@@ -76,13 +75,17 @@ export function useCaja() {
       return acc;
     }, [] as ReceiptData["items"]);
 
-    const newReceipt = {
+    const newReceipt: ReceiptData = {
       tableNumber: selectedTableForPayment.number,
       cashierName: cashierName,
       method: paymentMethod,
       items: groupedOrders,
       total: tableTotalBs,
-      date: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+      date: new Date().toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }),
+      currency: paymentCurrency,
+      exchangeRate: exchangeRate,
+      amountReceived: Number(amountReceived) || 0,
+      changeBs: changeBs
     };
 
     await new Promise(resolve => setTimeout(resolve, 1000))
@@ -97,7 +100,7 @@ export function useCaja() {
         return;
       }
 
-      await apiClient.post(`/orders/${orderId}/pay/`, {
+      await apiClient.post(`/orders/orders/${orderId}/pay/`, {
         payment_method: paymentMethod,
         // Campos preparados para cuando el backend los acepte (actualmente los ignora sin error):
         currency: paymentCurrency === "USD" ? "USD" : "BOB",
@@ -113,13 +116,15 @@ export function useCaja() {
       // 3. (Refetch) Invalida caché de React Query para actualizar mesas y caja
       await Promise.all([refetchTables(), refetchShift()]);
 
-    } catch (error) {
-      console.error("Error al procesar el cobro:", error);
-    }
+      setSelectedTableForPayment(null)
+      setIsProcessingPayment(false)
+      setReceiptData(newReceipt)
 
-    setSelectedTableForPayment(null)
-    setIsProcessingPayment(false)
-    setReceiptData(newReceipt)
+    } catch (error: any) {
+      console.error("Error al procesar el cobro:", error);
+      alert(error.response?.data?.error || "Error al procesar el cobro. Asegúrate de tener un turno abierto.");
+      setIsProcessingPayment(false);
+    }
   }
 
   return {
