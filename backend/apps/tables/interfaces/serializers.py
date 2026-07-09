@@ -5,7 +5,7 @@ from apps.inventory.interfaces.serializers import ProductSerializer
 import uuid
 
 class TableSerializer(serializers.ModelSerializer):
-    number = serializers.CharField(source='table_number')
+    number = serializers.CharField(source='table_number',required=False)
     customerName = serializers.SerializerMethodField()
     activeTime = serializers.SerializerMethodField()
     currentTotal = serializers.SerializerMethodField()

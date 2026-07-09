@@ -10,6 +10,7 @@ import {
 import LinearGradient from "react-native-linear-gradient";
 import { colors } from "../theme/colors";
 import { login, setToken } from "../services/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function LoginScreen({ navigation }) {
   const [username, setUsername] = useState("");
@@ -23,9 +24,31 @@ const handleLogin = async () => {
 
   try {
     const data = await login(username, password);
-    console.log("LOGIN OK:", data);
 
-  
+    console.log("LOGIN OK:", data);
+    console.log("USUARIO RECIBIDO:", data.user || data.usuario || data);
+
+    await AsyncStorage.multiRemove([
+      "accessToken",
+      "refreshToken",
+      "userName",
+      "userEmail",
+    ]);
+
+    await AsyncStorage.setItem("accessToken", data.access);
+    await AsyncStorage.setItem("refreshToken", data.refresh);
+
+    const usuario = data.user || data.usuario || data;
+
+    const nombreCompleto =
+      `${usuario.first_name || ""} ${usuario.last_name || ""}`.trim() ||
+      usuario.username ||
+      username ||
+      "Usuario";
+
+    await AsyncStorage.setItem("userName", nombreCompleto);
+    await AsyncStorage.setItem("userEmail", usuario.email || "");
+
     navigation.replace("Mesas");
   } catch (e) {
     console.log("ERROR REAL:", e);
