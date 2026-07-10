@@ -5,7 +5,7 @@ from apps.inventory.interfaces.serializers import ProductSerializer
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
-        fields = ['id', 'order', 'product', 'quantity', 'price']
+        fields = ['id', 'order', 'product', 'quantity', 'price', 'is_takeaway']
         read_only_fields = ['price'] # Price is set from product at creation
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -14,5 +14,5 @@ class OrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ['id', 'table', 'table_number', 'customer_name', 'active_time', 'status', 'total', 'created_at', 'updated_at', 'items']
+        fields = ['id', 'table', 'table_number', 'waiter', 'customer_name', 'active_time', 'status', 'total', 'observation_note', 'created_at', 'updated_at', 'items']
         read_only_fields = ['total', 'status']

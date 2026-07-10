@@ -34,3 +34,18 @@ class User(AbstractUser):
 
     def __str__(self):
         return f"{self.username} - {self.get_role_display()}"
+
+class EmployeeShift(models.Model):
+    user = models.ForeignKey(User, related_name='work_shifts', on_delete=models.CASCADE)
+    start_time = models.DateTimeField(auto_now_add=True)
+    end_time = models.DateTimeField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    observations = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = _('turno de empleado')
+        verbose_name_plural = _('turnos de empleados')
+        ordering = ['-start_time']
+
+    def __str__(self):
+        return f"Shift {self.id} - {self.user.username}"

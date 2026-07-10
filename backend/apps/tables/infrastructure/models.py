@@ -5,6 +5,7 @@ class TableStatus(models.TextChoices):
     FREE = 'Libre', _('Libre')
     OCCUPIED = 'Ocupada', _('Ocupada')
     RESERVED = 'Reservada', _('Reservada')
+    OBSERVED = 'Observada', _('Observada')
 
 class Table(models.Model):
     table_number = models.CharField(max_length=20, unique=True)

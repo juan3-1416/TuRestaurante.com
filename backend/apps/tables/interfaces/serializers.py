@@ -18,7 +18,7 @@ class TableSerializer(serializers.ModelSerializer):
 
     def get_active_order(self, obj):
         if not hasattr(obj, '_active_order'):
-            obj._active_order = obj.orders.filter(status='Pendiente').first()
+            obj._active_order = obj.orders.filter(status__in=['Pendiente', 'Observada']).first()
         return obj._active_order
 
     def get_customerName(self, obj):
@@ -48,6 +48,7 @@ class TableSerializer(serializers.ModelSerializer):
                 product_data = ProductSerializer(item.product).data
                 product_data['cartId'] = str(uuid.uuid4())
                 product_data['price'] = float(item.price)
+                product_data['isTakeaway'] = item.is_takeaway
                 products.append(product_data)
         return products
 
