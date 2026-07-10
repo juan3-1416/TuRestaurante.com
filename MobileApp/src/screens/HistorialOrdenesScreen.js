@@ -14,7 +14,7 @@ import Icon from "react-native-vector-icons/Feather";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 
-const API_BASE_URL = "http://192.168.0.22:8000";
+const API_BASE_URL = "http://192.168.0.10:8000";
 const ORDERS_URL = `${API_BASE_URL}/api/orders/orders/`;
 const PRODUCTS_URL = `${API_BASE_URL}/api/inventory/products/`;
 

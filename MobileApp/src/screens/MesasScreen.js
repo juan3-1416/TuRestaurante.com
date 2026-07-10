@@ -14,7 +14,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 
 // Ejemplo:
-const API_URL = "http://192.168.0.22:8000/api/tables/tables/";
+const API_URL = "http://192.168.0.10:8000/api/tables/tables/";
 
 export default function MesasScreen({ navigation }) {
   const [filter, setFilter] = useState("Todas");

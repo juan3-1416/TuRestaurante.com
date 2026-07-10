@@ -14,7 +14,7 @@ import {
 import { colors } from "../theme/colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const API_BASE_URL = "http://192.168.0.22:8000";
+const API_BASE_URL = "http://192.168.0.10:8000";
 const PRODUCTS_URL = `${API_BASE_URL}/api/inventory/products/`;
 const ORDERS_URL = `${API_BASE_URL}/api/orders/orders/`;
 const ORDER_ITEMS_URL = `${API_BASE_URL}/api/orders/order-items/`;
