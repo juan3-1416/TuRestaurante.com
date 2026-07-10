@@ -9,11 +9,12 @@ class TableSerializer(serializers.ModelSerializer):
     customerName = serializers.SerializerMethodField()
     activeTime = serializers.SerializerMethodField()
     currentTotal = serializers.SerializerMethodField()
+    activeOrderId = serializers.SerializerMethodField()
     orders = serializers.SerializerMethodField()
 
     class Meta:
         model = Table
-        fields = ['id', 'number', 'capacity', 'status', 'pos_x', 'pos_y', 'customerName', 'activeTime', 'currentTotal', 'orders']
+        fields = ['id', 'number', 'capacity', 'status', 'pos_x', 'pos_y', 'customerName', 'activeTime', 'currentTotal', 'activeOrderId', 'orders']
 
     def get_active_order(self, obj):
         if not hasattr(obj, '_active_order'):
@@ -32,6 +33,10 @@ class TableSerializer(serializers.ModelSerializer):
         order = self.get_active_order(obj)
         return float(order.total) if order else 0.0
 
+    def get_activeOrderId(self, obj):
+        order = self.get_active_order(obj)
+        return order.id if order else None
+
     def get_orders(self, obj):
         order = self.get_active_order(obj)
         if not order:
@@ -45,3 +50,4 @@ class TableSerializer(serializers.ModelSerializer):
                 product_data['price'] = float(item.price)
                 products.append(product_data)
         return products
+

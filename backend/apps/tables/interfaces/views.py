@@ -1,6 +1,7 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from apps.tables.infrastructure.models import Table
 from apps.orders.infrastructure.models import Order, OrderItem
 from apps.inventory.infrastructure.models import Product
@@ -9,6 +10,7 @@ from .serializers import TableSerializer
 class TableViewSet(viewsets.ModelViewSet):
     queryset = Table.objects.all()
     serializer_class = TableSerializer
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return super().get_queryset().filter(is_active=True)
@@ -81,6 +83,7 @@ class TableViewSet(viewsets.ModelViewSet):
                         product_counts[p_id] = {'qty': 0, 'price': price}
                     product_counts[p_id]['qty'] += 1
                 
+                new_total = 0
                 for p_id, info in product_counts.items():
                     product = Product.objects.filter(id=p_id).first()
                     if product:
@@ -90,6 +93,11 @@ class TableViewSet(viewsets.ModelViewSet):
                             quantity=info['qty'],
                             price=info['price']
                         )
+                        new_total += float(info['price']) * info['qty']
+                
+                # Actualizar el total de la orden con el monto calculado
+                order.total = new_total
+                order.save()
 
         elif new_status == 'Libre':
             order = table.orders.filter(status='Pendiente').first()

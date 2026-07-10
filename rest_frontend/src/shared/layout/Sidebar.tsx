@@ -1,78 +1,93 @@
 "use client"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { 
-  UtensilsCrossed, 
-  LayoutGrid, 
-  BarChart3, 
-  LogOut, 
-  ChevronLeft, 
-  Menu,
-  Wallet
+  UtensilsCrossed, LayoutGrid, BarChart3, LogOut, ChevronLeft, Wallet, Users, UserCircle, LucideIcon
 } from "lucide-react"
-import { useAuthStore } from "@/store/authStore"
+import { useAuthStore, Role } from "@/store/authStore"
 
 export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false)
   const pathname = usePathname()
   const router = useRouter()
   const logout = useAuthStore((state) => state.logout)
+  const user = useAuthStore((state) => state.user)
 
   const handleLogout = () => {
     logout()
     router.push("/login")
   }
-
-  // Definimos nuestras rutas principales
-  const menuItems = [
-    { name: "Menú y Platillos", icon: UtensilsCrossed, path: "/dashboard" },
-    { name: "Mapa de Mesas", icon: LayoutGrid, path: "/pos/mesas" },
-    { name: "Caja", icon: Wallet, path: "/caja" },
-    // La ruta de reportes la dejamos visualmente desactivada por ahora (Sprint 4)
-    { name: "Reportes IA", icon: BarChart3, path: "#", disabled: true },
+  
+  const menuItems: { name: string; icon: LucideIcon; path: string; disabled?: boolean; roles: Role[] }[] = [
+    { name: "Menú y Platillos", icon: UtensilsCrossed, path: "/dashboard", roles: ["ADMIN"] },
+    { name: "Mapa de Mesas", icon: LayoutGrid, path: "/pos/mesas", roles: ["ADMIN", "CASHIER", "WAITER"] },
+    { name: "Caja", icon: Wallet, path: "/caja", roles: ["ADMIN", "CASHIER"] },
+    { name: "Usuarios", icon: Users, path: "/admin/usuarios", roles: ["ADMIN"] }, 
+    { name: "Mi Perfil", icon: UserCircle, path: "/perfil", roles: ["ADMIN", "CASHIER", "WAITER"] }, 
+    { name: "Reportes IA", icon: BarChart3, path: "#", disabled: true, roles: ["ADMIN"] },
   ]
+
+  // Usamos useEffect para evitar errores de hidratación (SSR vs Client)
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setMounted(true), 0)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Filtramos el menú según el rol del usuario conectado
+  // Convertimos todo a minúsculas para evitar problemas de capitalización
+  const filteredMenu = menuItems.filter(item => 
+    user?.role && item.roles.map(r => r.toLowerCase()).includes(user.role.toLowerCase())
+  )
+
+  if (!mounted) return null // Evita mostrar la versión SSR sin datos locales
 
   return (
     <aside 
-      className={`relative h-[calc(100vh-2rem)] my-4 ml-4 transition-all duration-300 ease-in-out flex flex-col z-20 ${
-        isCollapsed ? "w-20" : "w-64"
-      } bg-restaurante-primario/60 backdrop-blur-xl border border-white/20 rounded-3xl text-white shadow-[0_8px_32px_0_rgba(0,0,0,0.2)]`}
+      className={`relative h-[calc(100vh-2rem)] my-4 ml-4 transition-all duration-300 ease-in-out flex flex-col bg-restaurante-oscuro/95 backdrop-blur-xl border border-white/10 rounded-[2.5rem] shadow-2xl ${
+        isCollapsed ? "w-[88px]" : "w-[280px]"
+      }`}
     >
-      {/* Botón para colapsar/expandir (Efecto cristal tintado) */}
+      {/* Botón para colapsar/expandir */}
       <button 
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-3 top-8 bg-restaurante-acento/80 backdrop-blur-md border border-white/20 text-white p-1 rounded-full shadow-lg hover:bg-restaurante-claro transition-colors z-30"
+        className="absolute -right-4 top-10 bg-restaurante-primario text-white p-2 rounded-full shadow-lg hover:bg-restaurante-acento transition-colors z-10 hidden md:block border-4 border-gray-50"
       >
-        {isCollapsed ? <Menu size={18} /> : <ChevronLeft size={18} />}
+        <ChevronLeft size={16} className={`transition-transform duration-300 ${isCollapsed ? "rotate-180" : ""}`} />
       </button>
 
-      {/* Header del Sidebar */}
-      <div className="p-6 flex items-center justify-center border-b border-white/10 h-24">
-        {isCollapsed ? (
-          <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm border border-white/20 flex items-center justify-center font-bold text-xl shadow-lg">
-            N
+      {/* Header del Sidebar (Logo y Perfil) */}
+      <div className="p-6 flex flex-col gap-6">
+        <div className={`flex items-center text-white ${isCollapsed ? "justify-center" : "gap-3"}`}>
+          <div className="w-10 h-10 rounded-2xl bg-linear-to-tr from-restaurante-primario to-restaurante-acento flex items-center justify-center shadow-lg shadow-restaurante-primario/30 shrink-0">
+            <span className="font-black text-xl tracking-tight leading-none">N</span>
           </div>
-        ) : (
-          <h2 className="text-2xl font-bold tracking-tight text-transparent bg-clip-text bg-linear-to-r from-white to-restaurante-claro drop-shadow-sm">
-            NextOrder
-          </h2>
-        )}
+          {!isCollapsed && (
+            <div className="flex flex-col animate-in fade-in duration-300">
+              <span className="font-black text-xl tracking-tight leading-none">NextOrder</span>
+              <span className="text-[10px] text-white/50 font-bold uppercase tracking-widest mt-1">
+                {user?.role || "Sistema POS"}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Navegación */}
-      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-        {menuItems.map((item) => {
-          const isActive = pathname === item.path
+      {/* Navegación - Mapeamos filteredMenu en lugar de menuItems */}
+      <nav className="flex-1 px-4 flex flex-col gap-2 overflow-y-auto scrollbar-hide">
+        {filteredMenu.map((item) => {
           const Icon = item.icon
-
-          return item.disabled ? (
-            <div key={item.name} className="flex items-center p-3 rounded-xl text-white/40 cursor-not-allowed mb-2">
-              <Icon size={22} className={isCollapsed ? "mx-auto" : "mr-3"} />
-              {!isCollapsed && <span className="font-medium text-sm">Sprint 4: {item.name}</span>}
+          const isActive = pathname === item.path
+          
+          if (item.disabled) return (
+            <div key={item.name} className="flex items-center p-3 rounded-xl text-white/20 cursor-not-allowed opacity-50">
+              <Icon size={22} className={`${isCollapsed ? "mx-auto" : "mr-3"}`} />
+              {!isCollapsed && <span className="font-medium text-sm">Sprint 5: {item.name}</span>}
             </div>
-          ) : (
+          )
+
+          return (
             <Link 
               key={item.name} 
               href={item.path}
@@ -80,8 +95,7 @@ export function Sidebar() {
                 isActive 
                   ? "bg-white/20 shadow-lg border border-white/10 backdrop-blur-md text-white" 
                   : "text-white/70 hover:bg-white/10 hover:text-white"
-              }`}
-            >
+              }`}>
               <Icon 
                 size={22} 
                 className={`${isCollapsed ? "mx-auto" : "mr-3"} ${isActive ? "text-white" : "group-hover:scale-110 transition-transform duration-200"}`} 
@@ -98,8 +112,8 @@ export function Sidebar() {
           onClick={handleLogout}
           className="flex items-center w-full p-3 rounded-xl text-red-200 hover:bg-red-500/20 hover:backdrop-blur-sm transition-all duration-200 group border border-transparent hover:border-red-500/30"
         >
-          <LogOut size={22} className={`${isCollapsed ? "mx-auto" : "mr-3"} group-hover:text-red-400`} />
-          {!isCollapsed && <span className="font-medium">Cerrar Sesión</span>}
+          <LogOut size={22} className={`${isCollapsed ? "mx-auto" : "mr-3"} group-hover:-translate-x-1 transition-transform duration-200`} />
+          {!isCollapsed && <span className="font-bold">Cerrar Sesión</span>}
         </button>
       </div>
     </aside>

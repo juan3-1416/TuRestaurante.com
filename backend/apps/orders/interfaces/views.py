@@ -35,6 +35,27 @@ class OrderViewSet(viewsets.ModelViewSet):
         except ValueError:
             return Response({'error': 'Método de pago inválido.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # ── Extraer campos de moneda enviados por el frontend ──────────────────
+        currency_str = request.data.get('currency', 'BOB')
+        exchange_rate = request.data.get('exchange_rate', None)
+        amount_foreign = request.data.get('amount_foreign', None)
+
+        # Validar currency
+        from apps.cashier.infrastructure.models import Transaction as CashTransaction
+        valid_currencies = [c.value for c in CashTransaction.CurrencyType]
+        if currency_str not in valid_currencies:
+            currency_str = 'BOB'  # fallback seguro
+
+        # Convertir a Decimal si vienen como string o float
+        from decimal import Decimal, InvalidOperation
+        try:
+            exchange_rate = Decimal(str(exchange_rate)) if exchange_rate else None
+            amount_foreign = Decimal(str(amount_foreign)) if amount_foreign else None
+        except InvalidOperation:
+            exchange_rate = None
+            amount_foreign = None
+        # ────────────────────────────────────────────────────────────────────────
+
         # Buscar turno abierto
         shift = CashShift.objects.filter(is_open=True).first()
         if not shift:
@@ -51,7 +72,10 @@ class OrderViewSet(viewsets.ModelViewSet):
                 transaction_type=TransactionType.INCOME,
                 description=f"Cobro Orden #{order.id} - Mesa {order.table.table_number}",
                 amount=order.total,
-                payment_method=payment_method
+                payment_method=payment_method,
+                currency=currency_str,
+                exchange_rate=exchange_rate,
+                amount_foreign=amount_foreign,
             )
             
         serializer = self.get_serializer(order)

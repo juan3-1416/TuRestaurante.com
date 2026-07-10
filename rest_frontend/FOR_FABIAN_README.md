@@ -59,3 +59,7 @@ docker exec -it rest_backend python manage.py createsuperuser
 ```
 
 Te preguntará de forma interactiva tu usuario y tu contraseña. ¡Sácalas, ve a `http://localhost:3000` y experimenta el inicio de sesión real!
+
+
+Para Reconstruir el docker y aplicar cambios estructurales.
+docker-compose up -d --build

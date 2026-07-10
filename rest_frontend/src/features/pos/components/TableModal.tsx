@@ -23,9 +23,8 @@ import {
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/shared/components/LoadingButton"
-import { apiClient } from "@/lib/axios"
 
-import { usePosStore } from "@/store/posStore"
+import { useTables } from "../hooks/useTables"
 
 // Esquema de validación para la mesa
 const formSchema = z.object({
@@ -41,8 +40,7 @@ interface TableModalProps {
 
 export function TableModal({ onTableCreated, tableToEdit, trigger }: TableModalProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const addTable = usePosStore((state) => state.addTable)
-  const editTable = usePosStore((state) => state.editTable)
+  const { tables, createTable, editTable, deleteTable } = useTables()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -52,32 +50,31 @@ export function TableModal({ onTableCreated, tableToEdit, trigger }: TableModalP
     },
   })
 
-  const { isSubmitting } = form.formState
+  // We check if either createTable or editTable is pending to show the loading state
+  const isSubmitting = createTable.isPending || editTable.isPending
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
-      const payload = {
-        number: parseInt(values.number) || 1,
-        capacity: parseInt(values.capacity) || 1
+      const parsedNumber = parseInt(values.number) || 1;
+      const parsedCapacity = parseInt(values.capacity) || 1;
+
+      // NUEVA LÓGICA DE VALIDACIÓN: Verificar si el número de mesa ya está en uso
+      const isDuplicate = tables.some(
+        (t) => t.number === parsedNumber && t.id !== tableToEdit?.id
+      );
+
+      if (isDuplicate) {
+        form.setError("number", {
+          type: "manual",
+          message: "Este número de mesa ya está en uso.",
+        });
+        return; // Detenemos la ejecución si hay duplicado
       }
-      
-      try {
-        if (tableToEdit) {
-          console.log("Actualizando mesa en servidor:", payload)
-          await apiClient.put(`/tables/tables/${tableToEdit.id}/`, payload)
-        } else {
-          console.log("Guardando nueva mesa en servidor:", payload)
-          await apiClient.post('/tables/tables/', payload)
-        }
-      } catch (apiError) {
-        console.warn("Backend API offline, actualizando estado de Zustand localmente:", apiError)
-      }
-      
-      // Aplicar cambio local en el store global para respuesta instantánea de la UI
+
       if (tableToEdit) {
-        editTable(tableToEdit.id, payload.number, payload.capacity)
+        await editTable.mutateAsync({ id: tableToEdit.id, number: parsedNumber, capacity: parsedCapacity })
       } else {
-        addTable(payload.number, payload.capacity)
+        await createTable.mutateAsync({ number: parsedNumber, capacity: parsedCapacity })
       }
 
       setIsOpen(false)
@@ -89,12 +86,19 @@ export function TableModal({ onTableCreated, tableToEdit, trigger }: TableModalP
         onTableCreated()
       }
     } catch (error) {
-      console.error("Error al guardar:", error)
+      console.error("Error al guardar la mesa:", error)
+    }
+  }
+
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open)
+    if (!open && !tableToEdit) {
+      form.reset()
     }
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger ? (
           trigger
@@ -126,8 +130,7 @@ export function TableModal({ onTableCreated, tableToEdit, trigger }: TableModalP
                   <FormLabel className="text-sm font-semibold text-restaurante-oscuro/90">Número de Mesa</FormLabel>
                   <FormControl>
                     <Input 
-                      type="number"
-                      placeholder="Ej. 1, 2, 3..." 
+                      type="number" 
                       disabled={isSubmitting} 
                       className="h-11 px-4 bg-white/60 border border-gray-200/70 rounded-xl text-base transition-all duration-200 focus:bg-white focus:border-restaurante-acento focus:ring-2 focus:ring-restaurante-acento/15 disabled:cursor-not-allowed disabled:opacity-60"
                       {...field} 
@@ -146,8 +149,7 @@ export function TableModal({ onTableCreated, tableToEdit, trigger }: TableModalP
                   <FormLabel className="text-sm font-semibold text-restaurante-oscuro/90">Capacidad (Personas)</FormLabel>
                   <FormControl>
                     <Input 
-                      type="number"
-                      placeholder="Ej. 2, 4, 6..." 
+                      type="number" 
                       disabled={isSubmitting} 
                       className="h-11 px-4 bg-white/60 border border-gray-200/70 rounded-xl text-base transition-all duration-200 focus:bg-white focus:border-restaurante-acento focus:ring-2 focus:ring-restaurante-acento/15 disabled:cursor-not-allowed disabled:opacity-60"
                       {...field} 
@@ -158,7 +160,25 @@ export function TableModal({ onTableCreated, tableToEdit, trigger }: TableModalP
               )}
             />
 
-            <div className="pt-6 flex justify-end">
+            <div className="pt-6 flex justify-between items-center gap-4">
+              {tableToEdit ? (
+                <LoadingButton
+                  type="button"
+                  variant="outline"
+                  onClick={async () => {
+                    if (window.confirm("¿Estás seguro de eliminar esta mesa?")) {
+                      await deleteTable.mutateAsync(tableToEdit.id)
+                      setIsOpen(false)
+                    }
+                  }}
+                  isLoading={deleteTable.isPending}
+                  className="h-11 px-7 rounded-xl border-red-500 text-red-600 hover:bg-red-50 transition-all shadow-sm"
+                >
+                  Eliminar
+                </LoadingButton>
+              ) : (
+                <div />
+              )}
               <LoadingButton 
                 type="submit" 
                 isLoading={isSubmitting}

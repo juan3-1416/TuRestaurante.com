@@ -2,13 +2,14 @@
 
 import { useState } from "react"
 import { Users, Filter, CheckCircle2, Receipt, CalendarClock, Play } from "lucide-react"
-import { usePosStore, TableStatus } from "@/store/posStore"
+import { TableStatus } from "@/store/posStore"
+import { useTables } from "../hooks/useTables"
 import { TableDetailModal } from "./TableDetailModal"
 import { TableModal } from "./TableModal"
 
 export function TableMap() {
-  // Conectamos al store global para leer las mesas
-  const tables = usePosStore((state) => state.tables)
+  // Conectamos a React Query para leer las mesas desde la API
+  const { tables, isLoading } = useTables()
   const [activeFilter, setActiveFilter] = useState<TableStatus | "Todas">("Todas")
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null)
   
@@ -47,6 +48,10 @@ export function TableMap() {
     }
   }
 
+  if (isLoading) {
+    return <div className="text-center p-10 text-gray-500">Cargando mesas...</div>
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
       
@@ -58,7 +63,6 @@ export function TableMap() {
           </div>
           <div>
             <h2 className="text-lg font-bold text-restaurante-oscuro">Filtrar Mesas</h2>
-            <p className="text-xs text-gray-500 font-medium">Visualiza el estado por categorías</p>
           </div>
         </div>
 

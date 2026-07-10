@@ -2,7 +2,7 @@ services:
   db:
     image: postgres:15-alpine
     container_name: turestaurante_db
-    restart: always
+    restart: "no"
     environment:
       POSTGRES_DB: ${DB_NAME:-turestaurante_db}
       POSTGRES_USER: ${DB_USER:-admin}
@@ -17,9 +17,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: rest_backend
-    # El comando inicial intentara aplicar las migraciones y levantar el server de desarrollo
+    restart: "no"
+    # Instala nuevos requerimientos, aplica migraciones y levanta el servidor
     command: >
-      sh -c "python manage.py makemigrations &&
+      sh -c "pip install -r requirements.txt &&
+             python manage.py makemigrations &&
              python manage.py migrate &&
              python manage.py runserver 0.0.0.0:8000"
     volumes:
@@ -41,7 +43,8 @@ services:
       context: ./rest_frontend
       dockerfile: Dockerfile
     container_name: rest_frontend
-    command: npm run dev
+    restart: "no"
+    command: sh -c "npm install && npm run dev"
     volumes:
       # Refleja tus cambios locales en el contenedor
       - ./rest_frontend:/app
