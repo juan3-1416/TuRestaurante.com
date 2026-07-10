@@ -15,10 +15,11 @@ import { colors } from "../theme/colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_BASE_URL = "http://192.168.0.10:8000";
+
 const PRODUCTS_URL = `${API_BASE_URL}/api/inventory/products/`;
 const ORDERS_URL = `${API_BASE_URL}/api/orders/orders/`;
 const ORDER_ITEMS_URL = `${API_BASE_URL}/api/orders/order-items/`;
-const TABLES_URL = `${API_BASE_URL}/api/tables/tables/`;
+const TABLES_URL = `${API_BASE_URL}/api/tables/`;
 
 export default function PedidoScreen({ route, navigation }) {
   const { mesa } = route.params;
@@ -28,11 +29,7 @@ export default function PedidoScreen({ route, navigation }) {
   const [subcategoriaSeleccionada, setSubcategoriaSeleccionada] =
     useState(null);
 
-  // Solo contiene productos nuevos que el mesero agrega ahora.
   const [carrito, setCarrito] = useState([]);
-
-  // Contiene los productos que ya estaban registrados
-  // en la orden pendiente de la mesa.
   const [pedidoActual, setPedidoActual] = useState([]);
   const [ordenPendiente, setOrdenPendiente] = useState(null);
 
@@ -41,8 +38,16 @@ export default function PedidoScreen({ route, navigation }) {
   const [enviando, setEnviando] = useState(false);
   const [vista, setVista] = useState("productos");
 
+  const getMesaNumber = () => {
+    return mesa?.table_number ?? mesa?.number ?? "";
+  };
+
   const getAuthHeaders = async () => {
     const token = await AsyncStorage.getItem("accessToken");
+
+    if (!token) {
+      throw new Error("No existe token de autenticación");
+    }
 
     return {
       "Content-Type": "application/json",
@@ -50,27 +55,92 @@ export default function PedidoScreen({ route, navigation }) {
     };
   };
 
+  const parseJsonResponse = async (response, contexto) => {
+    const text = await response.text();
+
+    console.log(`STATUS ${contexto}:`, response.status);
+    console.log(`RESPUESTA ${contexto}:`, text);
+
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      throw new Error(
+        `El servidor no devolvió JSON en ${contexto}. Estado: ${response.status}. Respuesta: ${text}`
+      );
+    }
+  };
+
+  const normalizarLista = (data) => {
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    if (Array.isArray(data?.results)) {
+      return data.results;
+    }
+
+    return [];
+  };
+
+  const obtenerDetalleOrden = async (orderId) => {
+    const headers = await getAuthHeaders();
+
+    const url = `${ORDERS_URL}${orderId}/`;
+
+    console.log("DETALLE ORDEN URL:", url);
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers,
+    });
+
+    const data = await parseJsonResponse(response, "DETALLE ORDEN");
+
+    if (!response.ok) {
+      throw new Error(JSON.stringify(data));
+    }
+
+    return data;
+  };
+
   const buscarOrdenPendienteDeMesa = async () => {
     const headers = await getAuthHeaders();
+
+    console.log("========== BUSCAR ORDEN PENDIENTE ==========");
+    console.log("ORDERS_URL:", ORDERS_URL);
+    console.log("MESA ACTUAL:", mesa);
 
     const response = await fetch(ORDERS_URL, {
       method: "GET",
       headers,
     });
 
-    const data = await response.json();
-
-    console.log("ORDENES BACKEND:", data);
+    const data = await parseJsonResponse(response, "ORDENES BACKEND");
 
     if (!response.ok) {
       throw new Error(JSON.stringify(data));
     }
 
-    const ordenPendienteEncontrada = data.find(
-      (order) =>
-        order.table === mesa.id &&
+    const ordenes = normalizarLista(data);
+
+    console.log("ORDENES NORMALIZADAS:", ordenes);
+
+    const ordenPendienteEncontrada = ordenes.find((order) => {
+      const mesaOrden =
+        order.table?.id ??
+        order.table ??
+        order.mesa?.id ??
+        order.mesa ??
+        order.table_id;
+
+      return (
+        Number(mesaOrden) === Number(mesa.id) &&
         order.status === "Pendiente"
-    );
+      );
+    });
+
+    console.log("ORDEN PENDIENTE ENCONTRADA:", ordenPendienteEncontrada);
+    console.log("===========================================");
 
     return ordenPendienteEncontrada || null;
   };
@@ -87,9 +157,22 @@ export default function PedidoScreen({ route, navigation }) {
         return;
       }
 
-      setOrdenPendiente(orden);
+      let ordenConDetalle = orden;
 
-      const itemsOrden = Array.isArray(orden.items) ? orden.items : [];
+      if (!Array.isArray(orden.items)) {
+        try {
+          ordenConDetalle = await obtenerDetalleOrden(orden.id);
+        } catch (error) {
+          console.log("No se pudo obtener detalle de orden:", error);
+          ordenConDetalle = orden;
+        }
+      }
+
+      setOrdenPendiente(ordenConDetalle);
+
+      const itemsOrden = Array.isArray(ordenConDetalle.items)
+        ? ordenConDetalle.items
+        : [];
 
       const itemsAdaptados = itemsOrden.map((item) => {
         const productoId =
@@ -98,17 +181,25 @@ export default function PedidoScreen({ route, navigation }) {
             : item.product;
 
         const productoCatalogo = productosDisponibles.find(
-          (producto) => producto.id === productoId
+          (producto) => Number(producto.id) === Number(productoId)
         );
 
         return {
           id: item.id,
-          cantidad: Number(item.quantity || 0),
-          precio: Number(item.price || productoCatalogo?.precio || 0),
+          cantidad: Number(item.quantity || item.cantidad || 0),
+          precio: Number(
+            item.price ??
+              item.precio ??
+              productoCatalogo?.precio ??
+              0
+          ),
           producto: productoCatalogo || {
             id: productoId,
-            nombre: `Producto #${productoId}`,
-            precio: Number(item.price || 0),
+            nombre:
+              typeof item.product === "object"
+                ? item.product.name || item.product.nombre
+                : `Producto #${productoId}`,
+            precio: Number(item.price || item.precio || 0),
           },
         };
       });
@@ -129,34 +220,42 @@ export default function PedidoScreen({ route, navigation }) {
 
       const headers = await getAuthHeaders();
 
+      console.log("========== CARGAR PRODUCTOS ==========");
+      console.log("PRODUCTS_URL:", PRODUCTS_URL);
+
       const response = await fetch(PRODUCTS_URL, {
         method: "GET",
         headers,
       });
 
-      const data = await response.json();
-
-      console.log("PRODUCTOS BACKEND:", data);
+      const data = await parseJsonResponse(response, "PRODUCTOS BACKEND");
 
       if (!response.ok) {
         throw new Error(JSON.stringify(data));
       }
 
-      const productosAdaptados = data.map((producto) => ({
+      const listaProductos = normalizarLista(data);
+
+      const productosAdaptados = listaProductos.map((producto) => ({
         id: producto.id,
-        nombre: producto.name,
-        precio: Number(producto.price),
-        categoria: producto.category_name || "Sin categoría",
+        nombre: producto.name ?? producto.nombre ?? `Producto #${producto.id}`,
+        precio: Number(producto.price ?? producto.precio ?? 0),
+        categoria:
+          producto.category_name ??
+          producto.categoria ??
+          "Sin categoría",
         subcategoria:
-          producto.subcategory_name ||
-          `Subcategoría ${producto.subcategory}`,
+          producto.subcategory_name ??
+          producto.subcategoria ??
+          (producto.subcategory
+            ? `Subcategoría ${producto.subcategory}`
+            : "Sin subcategoría"),
         status: producto.status,
         original: producto,
       }));
 
       setProductos(productosAdaptados);
 
-      // Cuando abre una mesa ocupada, carga su pedido pendiente.
       await cargarPedidoPendiente(productosAdaptados);
     } catch (error) {
       console.log("Error cargando productos:", error);
@@ -221,7 +320,7 @@ export default function PedidoScreen({ route, navigation }) {
       }),
     });
 
-    const data = await response.json();
+    const data = await parseJsonResponse(response, "MARCAR MESA OCUPADA");
 
     if (!response.ok) {
       throw new Error(JSON.stringify(data));
@@ -266,7 +365,7 @@ export default function PedidoScreen({ route, navigation }) {
 
     Alert.alert(
       ordenPendiente ? "Agregar al pedido" : "Crear pedido",
-      `Mesa ${mesa.number}\nProductos nuevos: ${cantidadCarrito}\nTotal por agregar: Bs. ${totalCarrito.toFixed(
+      `Mesa ${getMesaNumber()}\nProductos nuevos: ${cantidadCarrito}\nTotal por agregar: Bs. ${totalCarrito.toFixed(
         2
       )}`,
       [
@@ -282,15 +381,17 @@ export default function PedidoScreen({ route, navigation }) {
             try {
               const headers = await getAuthHeaders();
 
-              // Revisa nuevamente si existe una orden pendiente.
               let orden = await buscarOrdenPendienteDeMesa();
 
-              // Si la mesa todavía no tiene orden, crea una.
               if (!orden) {
                 const orderData = {
                   table: mesa.id,
                   customer_name: mesa.customerName || "",
                 };
+
+                console.log("========== CREAR ORDEN ==========");
+                console.log("URL CREAR ORDEN:", ORDERS_URL);
+                console.log("PAYLOAD ORDEN:", orderData);
 
                 const orderResponse = await fetch(ORDERS_URL, {
                   method: "POST",
@@ -298,14 +399,18 @@ export default function PedidoScreen({ route, navigation }) {
                   body: JSON.stringify(orderData),
                 });
 
-                orden = await orderResponse.json();
+                const orderDataResponse = await parseJsonResponse(
+                  orderResponse,
+                  "CREAR ORDEN"
+                );
 
                 if (!orderResponse.ok) {
-                  throw new Error(JSON.stringify(orden));
+                  throw new Error(JSON.stringify(orderDataResponse));
                 }
+
+                orden = orderDataResponse;
               }
 
-              // Solo registra los productos NUEVOS.
               for (const item of carrito) {
                 const orderItemData = {
                   order: orden.id,
@@ -313,13 +418,20 @@ export default function PedidoScreen({ route, navigation }) {
                   quantity: item.cantidad,
                 };
 
+                console.log("========== CREAR ITEM ==========");
+                console.log("URL CREAR ITEM:", ORDER_ITEMS_URL);
+                console.log("PAYLOAD ITEM:", orderItemData);
+
                 const itemResponse = await fetch(ORDER_ITEMS_URL, {
                   method: "POST",
                   headers,
                   body: JSON.stringify(orderItemData),
                 });
 
-                const itemCreated = await itemResponse.json();
+                const itemCreated = await parseJsonResponse(
+                  itemResponse,
+                  "CREAR ITEM"
+                );
 
                 if (!itemResponse.ok) {
                   throw new Error(JSON.stringify(itemCreated));
@@ -330,7 +442,6 @@ export default function PedidoScreen({ route, navigation }) {
 
               setCarrito([]);
 
-              // Recarga el pedido actual para mostrar lo recién agregado.
               await cargarPedidoPendiente(productos);
 
               setVista("carrito");
@@ -343,7 +454,7 @@ export default function PedidoScreen({ route, navigation }) {
               console.log("Error enviando pedido:", error);
               Alert.alert(
                 "Error",
-                "No se pudo registrar el pedido."
+                "No se pudo registrar el pedido. Revisa la consola para ver el detalle del backend."
               );
             } finally {
               setEnviando(false);
@@ -403,7 +514,7 @@ export default function PedidoScreen({ route, navigation }) {
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Mesa {mesa.number}</Text>
+          <Text style={styles.headerTitle}>Mesa {getMesaNumber()}</Text>
 
           {ordenPendiente && (
             <Text style={styles.pedidoBadge}>
@@ -449,6 +560,11 @@ export default function PedidoScreen({ route, navigation }) {
                   </Text>
                 </TouchableOpacity>
               )}
+              ListEmptyComponent={
+                <Text style={styles.emptyText}>
+                  No hay categorías disponibles.
+                </Text>
+              }
             />
           )}
 

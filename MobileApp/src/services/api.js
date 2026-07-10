@@ -1,54 +1,158 @@
-const BASE_URL = "http://192.168.0.10:8000/api";
+const API_BASE_URL = "http://192.168.0.10:8000";
 
-const headers = () => ({
-  "Content-Type": "application/json",
-});
+const getHeaders = (token = null) => {
+  const baseHeaders = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    baseHeaders.Authorization = `Bearer ${token}`;
+  }
+
+  return baseHeaders;
+};
+
 export const login = async (username, password) => {
   console.log("INTENTANDO LOGIN...");
 
-  const res = await fetch("http://192.168.0.10:8000/api/auth/token/", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      username,
-      password,
-    }),
-  });
+  const response = await fetch(
+    `${API_BASE_URL}/api/users/token/`,
+    {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({
+        username,
+        password,
+      }),
+    }
+  );
 
-  console.log("STATUS:", res.status);
+  const text = await response.text();
 
-  const text = await res.text();
-  console.log("RESPUESTA:", text);
+  console.log("STATUS LOGIN:", response.status);
+  console.log("RESPUESTA LOGIN:", text);
 
-  return JSON.parse(text);
+  let data;
+
+  try {
+    data = JSON.parse(text);
+  } catch (error) {
+    throw new Error(
+      `El servidor no devolvió JSON. Estado: ${response.status}`
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data.detail || "No se pudo iniciar sesión"
+    );
+  }
+
+  return data;
 };
 
 // PRODUCTOS
-export const getProductos = async (restaurante_id) => {
-  const res = await fetch(`${BASE_URL}/productos?restaurante_id=${restaurante_id}`, {
-    headers: headers(),
-  });
-  if (!res.ok) throw new Error('Error al obtener productos');
-  return res.json();
+export const getProductos = async (token) => {
+  const response = await fetch(
+    `${API_BASE_URL}/api/inventory/products/`,
+    {
+      method: "GET",
+      headers: getHeaders(token),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      JSON.stringify(data) || "Error al obtener productos"
+    );
+  }
+
+  return data;
 };
 
-// PEDIDOS
-export const crearPedido = async (pedido) => {
-  const res = await fetch(`${BASE_URL}/pedidos`, {
-    method: 'POST',
-    headers: headers(),
-    body: JSON.stringify(pedido),
-  });
-  if (!res.ok) throw new Error('Error al enviar pedido');
-  return res.json();
+// ÓRDENES
+export const getOrdenes = async (token) => {
+  const response = await fetch(
+    `${API_BASE_URL}/api/orders/orders/`,
+    {
+      method: "GET",
+      headers: getHeaders(token),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      JSON.stringify(data) || "Error al obtener órdenes"
+    );
+  }
+
+  return data;
 };
 
-export const getPedidosMesa = async (mesa_id) => {
-  const res = await fetch(`${BASE_URL}/pedidos?mesa_id=${mesa_id}`, {
-    headers: headers(),
-  });
-  if (!res.ok) throw new Error('Error al obtener pedidos');
-  return res.json();
+export const crearOrden = async (orden, token) => {
+  const response = await fetch(
+    `${API_BASE_URL}/api/orders/orders/`,
+    {
+      method: "POST",
+      headers: getHeaders(token),
+      body: JSON.stringify(orden),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      JSON.stringify(data) || "Error al crear la orden"
+    );
+  }
+
+  return data;
+};
+
+// ÍTEMS DE ORDEN
+export const crearOrderItem = async (item, token) => {
+  const response = await fetch(
+    `${API_BASE_URL}/api/orders/order-items/`,
+    {
+      method: "POST",
+      headers: getHeaders(token),
+      body: JSON.stringify(item),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      JSON.stringify(data) || "Error al crear el producto de la orden"
+    );
+  }
+
+  return data;
+};
+
+// MESAS
+export const getMesas = async (token) => {
+  const response = await fetch(
+    `${API_BASE_URL}/api/tables/tables/`,
+    {
+      method: "GET",
+      headers: getHeaders(token),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    throw new Error(
+      JSON.stringify(data) || "Error al obtener mesas"
+    );
+  }
+
+  return data;
 };

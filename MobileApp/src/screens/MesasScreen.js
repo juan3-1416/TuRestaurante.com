@@ -7,29 +7,52 @@ import {
   StyleSheet,
   Modal,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import { colors } from "../theme/colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 
-// Ejemplo:
-const API_URL = "http://192.168.0.10:8000/api/tables/tables/";
+const API_URL = "http://192.168.0.10:8000/api/tables/";
 
 export default function MesasScreen({ navigation }) {
   const [filter, setFilter] = useState("Todas");
   const [tables, setTables] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [menuVisible, setMenuVisible] = useState(false);
   const [userName, setUserName] = useState("Administrador");
   const [userEmail, setUserEmail] = useState("Sesión activa");
 
+  const getTableNumber = (mesa) => {
+    return mesa?.table_number ?? mesa?.number ?? "";
+  };
+
   const getAuthHeaders = async () => {
     const token = await AsyncStorage.getItem("accessToken");
+
+    if (!token) {
+      throw new Error("No existe token de autenticación");
+    }
 
     return {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     };
+  };
+
+  const normalizarMesas = (data) => {
+    const lista = Array.isArray(data) ? data : data?.results || [];
+
+    return lista.sort((a, b) => {
+      const numA = Number(getTableNumber(a));
+      const numB = Number(getTableNumber(b));
+
+      if (Number.isNaN(numA)) return 1;
+      if (Number.isNaN(numB)) return -1;
+
+      return numA - numB;
+    });
   };
 
   const cargarPerfil = async () => {
@@ -46,26 +69,54 @@ export default function MesasScreen({ navigation }) {
 
   const cargarMesas = async () => {
     try {
+      setLoading(true);
+
       const headers = await getAuthHeaders();
+
+      console.log("========== CARGAR MESAS ==========");
+      console.log("URL MESAS:", API_URL);
+      console.log("HEADERS MESAS:", {
+        ...headers,
+        Authorization: headers.Authorization ? "Bearer TOKEN_EXISTE" : "SIN TOKEN",
+      });
 
       const response = await fetch(API_URL, {
         method: "GET",
         headers,
       });
 
-      const data = await response.json();
+      const text = await response.text();
+
+      console.log("STATUS MESAS:", response.status);
+      console.log("RESPUESTA MESAS:", text);
+      console.log("==================================");
+
+      let data;
+
+      try {
+        data = JSON.parse(text);
+      } catch (error) {
+        throw new Error(
+          `El servidor no devolvió JSON. Estado: ${response.status}. Respuesta: ${text}`
+        );
+      }
 
       if (!response.ok) {
         throw new Error(JSON.stringify(data));
       }
 
-      const mesasOrdenadas = data.sort(
-        (a, b) => Number(a.number) - Number(b.number)
-      );
+      const mesasOrdenadas = normalizarMesas(data);
 
       setTables(mesasOrdenadas);
     } catch (error) {
       console.log("Error al cargar mesas:", error);
+
+      Alert.alert(
+        "Error",
+        "No se pudieron cargar las mesas. Revisa la consola para ver la respuesta del backend."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -132,7 +183,17 @@ export default function MesasScreen({ navigation }) {
         }),
       });
 
-      const data = await response.json();
+      const text = await response.text();
+
+      let data;
+
+      try {
+        data = JSON.parse(text);
+      } catch (error) {
+        throw new Error(
+          `El servidor no devolvió JSON. Estado: ${response.status}. Respuesta: ${text}`
+        );
+      }
 
       if (!response.ok) {
         throw new Error(JSON.stringify(data));
@@ -147,6 +208,7 @@ export default function MesasScreen({ navigation }) {
       );
     } catch (error) {
       console.log("Error editando capacidad:", error);
+      Alert.alert("Error", "No se pudo modificar la capacidad de la mesa.");
     }
   };
 
@@ -154,14 +216,17 @@ export default function MesasScreen({ navigation }) {
     try {
       const headers = await getAuthHeaders();
 
+      const numerosExistentes = tables
+        .map((mesa) => Number(getTableNumber(mesa)))
+        .filter((numero) => !Number.isNaN(numero));
+
       const siguienteNumero =
-        tables.length > 0
-          ? Math.max(...tables.map((mesa) => Number(mesa.number))) + 1
+        numerosExistentes.length > 0
+          ? Math.max(...numerosExistentes) + 1
           : 1;
 
       const nuevaMesa = {
         table_number: String(siguienteNumero),
-        number: String(siguienteNumero),
         capacity: 4,
         status: "Libre",
         pos_x: 0,
@@ -176,20 +241,57 @@ export default function MesasScreen({ navigation }) {
 
       const text = await response.text();
 
-      if (!response.ok) {
-        throw new Error(text);
+      let data;
+
+      try {
+        data = JSON.parse(text);
+      } catch (error) {
+        throw new Error(
+          `El servidor no devolvió JSON. Estado: ${response.status}. Respuesta: ${text}`
+        );
       }
 
-      const mesaCreada = JSON.parse(text);
+      if (!response.ok) {
+        throw new Error(JSON.stringify(data));
+      }
 
-      setTables((prevTables) =>
-        [...prevTables, mesaCreada].sort(
-          (a, b) => Number(a.number) - Number(b.number)
-        )
-      );
+      await cargarMesas();
     } catch (error) {
       console.log("Error creando mesa:", error);
+      Alert.alert("Error", "No se pudo crear la mesa.");
     }
+  };
+
+  const puedeEliminarMesa = (mesa) => {
+    return mesa.status === "Libre";
+  };
+
+  const confirmarEliminarMesa = (mesa) => {
+    const numeroMesa = getTableNumber(mesa);
+
+    if (!puedeEliminarMesa(mesa)) {
+      Alert.alert(
+        "No se puede eliminar",
+        "Solo se pueden eliminar mesas libres. Las mesas ocupadas, reservadas o con pedido no deben eliminarse desde la aplicación móvil."
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Eliminar mesa",
+      `¿Seguro que deseas eliminar la Mesa ${numeroMesa}?`,
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Eliminar",
+          style: "destructive",
+          onPress: () => eliminarMesa(mesa.id),
+        },
+      ]
+    );
   };
 
   const eliminarMesa = async (id) => {
@@ -202,7 +304,8 @@ export default function MesasScreen({ navigation }) {
       });
 
       if (!response.ok) {
-        throw new Error("Error al eliminar mesa");
+        const text = await response.text();
+        throw new Error(text || "Error al eliminar mesa");
       }
 
       setTables((prevTables) =>
@@ -210,6 +313,7 @@ export default function MesasScreen({ navigation }) {
       );
     } catch (error) {
       console.log("Error eliminando mesa:", error);
+      Alert.alert("Error", "No se pudo eliminar la mesa.");
     }
   };
 
@@ -226,6 +330,8 @@ export default function MesasScreen({ navigation }) {
         return { color: "#EF4444", icon: "dollar-sign" };
       case "Reservada":
         return { color: "#EAB308", icon: "clock" };
+      case "Pedido":
+        return { color: "#2563EB", icon: "shopping-cart" };
       default:
         return { color: "#6B7280", icon: "circle" };
     }
@@ -233,6 +339,7 @@ export default function MesasScreen({ navigation }) {
 
   const renderItem = ({ item }) => {
     const statusStyle = getStyles(item.status);
+    const numeroMesa = getTableNumber(item);
 
     return (
       <View style={[styles.card, { borderColor: statusStyle.color }]}>
@@ -259,7 +366,7 @@ export default function MesasScreen({ navigation }) {
             </View>
 
             <View>
-              <Text style={styles.title}>Mesa {item.number}</Text>
+              <Text style={styles.title}>Mesa {numeroMesa}</Text>
               <Text style={styles.sub}>{item.capacity} personas</Text>
             </View>
           </View>
@@ -275,15 +382,19 @@ export default function MesasScreen({ navigation }) {
 
           <View style={styles.footer}>
             {item.status === "Ocupada" && (
-              <Text style={styles.total}>Bs. {item.currentTotal}</Text>
+              <Text style={styles.total}>Bs. {item.currentTotal || 0}</Text>
             )}
 
             {item.status === "Reservada" && (
-              <Text style={styles.time}>{item.activeTime}</Text>
+              <Text style={styles.time}>{item.activeTime || "Reservada"}</Text>
             )}
 
             {item.status === "Libre" && (
               <Text style={styles.available}>Disponible</Text>
+            )}
+
+            {item.status === "Pedido" && (
+              <Text style={styles.orderText}>Pedido activo</Text>
             )}
 
             <Icon name="play" size={16} color={colors.primary} />
@@ -297,15 +408,25 @@ export default function MesasScreen({ navigation }) {
           }
         >
           <Text style={styles.editText}>
-            + Capacidad Mesa {item.number}
+            + Capacidad Mesa {numeroMesa}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={styles.deleteBtn}
-          onPress={() => eliminarMesa(item.id)}
+          style={[
+            styles.deleteBtn,
+            !puedeEliminarMesa(item) && styles.deleteBtnDisabled,
+          ]}
+          onPress={() => confirmarEliminarMesa(item)}
         >
-          <Text style={styles.deleteText}>Eliminar</Text>
+          <Text
+            style={[
+              styles.deleteText,
+              !puedeEliminarMesa(item) && styles.deleteTextDisabled,
+            ]}
+          >
+            Eliminar
+          </Text>
         </TouchableOpacity>
       </View>
     );
@@ -389,13 +510,21 @@ export default function MesasScreen({ navigation }) {
 
           <Text style={styles.pageTitle}>Mesas</Text>
 
+          <TouchableOpacity
+            style={styles.refreshBtn}
+            onPress={cargarMesas}
+            disabled={loading}
+          >
+            <Icon name="refresh-cw" size={18} color="#4C1D95" />
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.addMesaBtn} onPress={crearMesa}>
             <Text style={styles.addMesaText}>+ Mesa</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.filters}>
-          {["Todas", "Libre", "Ocupada", "Reservada"].map((item) => (
+          {["Todas", "Libre", "Ocupada", "Reservada", "Pedido"].map((item) => (
             <TouchableOpacity
               key={item}
               onPress={() => setFilter(item)}
@@ -416,13 +545,27 @@ export default function MesasScreen({ navigation }) {
           ))}
         </View>
 
-        <FlatList
-          data={filtered}
-          renderItem={renderItem}
-          keyExtractor={(item) => String(item.id)}
-          numColumns={2}
-          columnWrapperStyle={{ justifyContent: "space-between" }}
-        />
+        {loading ? (
+          <View style={styles.loadingBox}>
+            <ActivityIndicator size="large" color="#4C1D95" />
+            <Text style={styles.loadingText}>Cargando mesas...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filtered}
+            renderItem={renderItem}
+            keyExtractor={(item) => String(item.id)}
+            numColumns={2}
+            columnWrapperStyle={{ justifyContent: "space-between" }}
+            ListEmptyComponent={
+              <View style={styles.emptyListBox}>
+                <Text style={styles.emptyListText}>
+                  No hay mesas para mostrar.
+                </Text>
+              </View>
+            }
+          />
+        )}
       </View>
     </>
   );
@@ -439,6 +582,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginBottom: 16,
+    gap: 8,
   },
 
   menuBtn: {
@@ -452,10 +596,19 @@ const styles = StyleSheet.create({
 
   pageTitle: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 4,
     fontSize: 22,
     fontWeight: "bold",
     color: "#4C1D95",
+  },
+
+  refreshBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#EDE9FE",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   addMesaBtn: {
@@ -473,13 +626,14 @@ const styles = StyleSheet.create({
   filters: {
     flexDirection: "row",
     marginBottom: 15,
+    flexWrap: "wrap",
+    gap: 8,
   },
 
   filter: {
     padding: 10,
     borderRadius: 12,
     backgroundColor: "#E5E7EB",
-    marginRight: 8,
   },
 
   activeFilter: {
@@ -490,6 +644,28 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "bold",
     color: "#1F2937",
+  },
+
+  loadingBox: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  loadingText: {
+    marginTop: 10,
+    color: "#4B5563",
+    fontWeight: "bold",
+  },
+
+  emptyListBox: {
+    paddingVertical: 40,
+    alignItems: "center",
+  },
+
+  emptyListText: {
+    color: "#6B7280",
+    fontWeight: "bold",
   },
 
   card: {
@@ -576,6 +752,11 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
 
+  orderText: {
+    color: "#2563EB",
+    fontWeight: "bold",
+  },
+
   editBtn: {
     marginTop: 10,
     backgroundColor: "#DBEAFE",
@@ -598,10 +779,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
+  deleteBtnDisabled: {
+    backgroundColor: "#E5E7EB",
+  },
+
   deleteText: {
     color: "#DC2626",
     fontWeight: "bold",
     fontSize: 12,
+  },
+
+  deleteTextDisabled: {
+    color: "#9CA3AF",
   },
 
   modalBackground: {
