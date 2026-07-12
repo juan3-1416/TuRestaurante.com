@@ -6,6 +6,10 @@ export function useTableStatusDetail(table: Table) {
   const [reserveName, setReserveName] = useState("")
   const [reserveTime, setReserveTime] = useState("")
 
+  // Estados para reportar fuga
+  const [isReportingWalkout, setIsReportingWalkout] = useState(false)
+  const [walkoutNote, setWalkoutNote] = useState("")
+
   const [prevTableId, setPrevTableId] = useState<string | null>(null)
 
   if (table.id !== prevTableId) {
@@ -13,6 +17,8 @@ export function useTableStatusDetail(table: Table) {
     setIsReserving(false)
     setReserveName("")
     setReserveTime("")
+    setIsReportingWalkout(false)
+    setWalkoutNote("")
   }
 
   // 1. Calculamos el total leyendo directamente de la mesa
@@ -40,6 +46,10 @@ export function useTableStatusDetail(table: Table) {
     setReserveName,
     reserveTime,
     setReserveTime,
+    isReportingWalkout,
+    setIsReportingWalkout,
+    walkoutNote,
+    setWalkoutNote,
     calculatedTotal,
     tickets
   }

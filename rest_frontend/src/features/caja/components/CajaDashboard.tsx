@@ -18,9 +18,10 @@ export function CajaDashboard() {
       <CajaTopPanel 
         isShiftOpen={cajaState.isShiftOpen} 
         cashierName={cajaState.cashierName} 
+        shift={cajaState.shift}
       />
 
-      {/* Tarjetas de Resumen Financiero Dinámicas (Actualizadas con USD) */}
+      {/* Tarjetas de Resumen Financiero Dinámicas */}
       <CajaSummaryCards 
         isShiftOpen={cajaState.isShiftOpen}
         shiftInitialBalance={cajaState.shiftInitialBalance}
@@ -30,20 +31,22 @@ export function CajaDashboard() {
         exchangeRate={cajaState.exchangeRate}
       />
 
-      {/* Mesas Pendientes de Cobro */}
+      {/* Mesas Pendientes de Cobro + Mesas Observadas */}
       <CajaPendingTables 
         isShiftOpen={cajaState.isShiftOpen}
         pendingTables={cajaState.pendingTables}
+        observedTables={cajaState.observedTables}
         handleOpenPaymentModal={cajaState.handleOpenPaymentModal}
+        handleOpenWalkoutModal={cajaState.handleOpenWalkoutModal}
       />
 
-      {/* Historial de Movimientos Dinámico */}
+      {/* Historial de Movimientos */}
       <CajaTransactionHistory 
         isShiftOpen={cajaState.isShiftOpen}
         transactions={cajaState.transactions}
       />
 
-      {/* MODAL DE COBRO AVANZADO MAS CALCULO DE CAMBIO*/}
+      {/* MODAL DE COBRO + DETALLE DE PEDIDO */}
       <CajaPaymentModal 
         selectedTableForPayment={cajaState.selectedTableForPayment}
         setSelectedTableForPayment={cajaState.setSelectedTableForPayment}
@@ -59,6 +62,8 @@ export function CajaDashboard() {
         changeBs={cajaState.changeBs}
         exchangeRate={cajaState.exchangeRate}
         handleConfirmPayment={cajaState.handleConfirmPayment}
+        isWalkoutMode={cajaState.isWalkoutMode}
+        handleResolveWalkout={cajaState.handleResolveWalkout}
       />
 
       <ReceiptModal 
@@ -68,4 +73,4 @@ export function CajaDashboard() {
       />
     </div>
   )
-}
+}

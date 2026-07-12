@@ -3,7 +3,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { 
-  UtensilsCrossed, LayoutGrid, BarChart3, LogOut, ChevronLeft, Wallet, Users, UserCircle, LucideIcon
+  UtensilsCrossed, LayoutGrid, BarChart3, LogOut, ChevronLeft, Wallet, Users, UserCircle, LucideIcon, Clock
 } from "lucide-react"
 import { useAuthStore, Role } from "@/store/authStore"
 
@@ -24,8 +24,9 @@ export function Sidebar() {
     { name: "Mapa de Mesas", icon: LayoutGrid, path: "/pos/mesas", roles: ["ADMIN", "CASHIER", "WAITER"] },
     { name: "Caja", icon: Wallet, path: "/caja", roles: ["ADMIN", "CASHIER"] },
     { name: "Usuarios", icon: Users, path: "/admin/usuarios", roles: ["ADMIN"] }, 
+    { name: "Mis Turnos", icon: Clock, path: "/turnos", roles: ["ADMIN", "CASHIER", "WAITER"] },
+    { name: "Reportes", icon: BarChart3, path: "/reportes", roles: ["ADMIN"] },
     { name: "Mi Perfil", icon: UserCircle, path: "/perfil", roles: ["ADMIN", "CASHIER", "WAITER"] }, 
-    { name: "Reportes IA", icon: BarChart3, path: "#", disabled: true, roles: ["ADMIN"] },
   ]
 
   // Usamos useEffect para evitar errores de hidratación (SSR vs Client)

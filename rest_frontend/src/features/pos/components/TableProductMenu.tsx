@@ -1,5 +1,5 @@
 import { DialogTitle } from "@/components/ui/dialog"
-import { ArrowLeft, ShoppingCart, Plus, Minus, Trash2, Tag, Utensils, Edit } from "lucide-react"
+import { ArrowLeft, ShoppingCart, Plus, Minus, Trash2, Tag, Utensils, Edit, ShoppingBag } from "lucide-react"
 import { LoadingButton } from "@/shared/components/LoadingButton"
 import { Dispatch, SetStateAction } from "react"
 import { useTableProductMenu, Product } from "../hooks/useTableProductMenu"
@@ -33,6 +33,7 @@ export function TableProductMenu({
     handleAddProduct,
     handleRemoveProduct,
     handleRemoveAllOfProduct,
+    handleToggleTakeaway,
     isLoadingProducts
   } = useTableProductMenu({ selectedProducts, setSelectedProducts })
 
@@ -164,12 +165,30 @@ export function TableProductMenu({
               </div>
             ) : (
               cartItems.map((item) => (
-                <div key={item.id} className="p-3 bg-white border border-gray-100 rounded-2xl shadow-sm flex items-center gap-3 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div key={`${item.id}-${item.isTakeaway ?? false}`} className="p-3 bg-white border border-gray-100 rounded-2xl shadow-sm flex items-center gap-3 animate-in fade-in slide-in-from-right-4 duration-300">
                   
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-sm text-gray-800 truncate">{item.name}</h4>
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-bold text-sm text-gray-800 truncate">{item.name}</h4>
+                      {item.isTakeaway && (
+                        <span className="text-[10px] font-bold bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-md shrink-0">🥡 Llevar</span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500 font-mono mt-0.5">Bs. {(item.price * item.quantity).toFixed(2)}</p>
                   </div>
+
+                  {/* Toggle Para Llevar */}
+                  <button
+                    title={item.isTakeaway ? "Quitar Para Llevar" : "Marcar Para Llevar"}
+                    onClick={() => handleToggleTakeaway(item.id, item.isTakeaway ?? false)}
+                    className={`w-8 h-8 flex items-center justify-center rounded-xl transition-all shrink-0 border ${
+                      item.isTakeaway
+                        ? "bg-orange-100 text-orange-500 border-orange-200 hover:bg-orange-200"
+                        : "bg-gray-50 text-gray-300 border-gray-200 hover:text-orange-400 hover:border-orange-300"
+                    }`}
+                  >
+                    <ShoppingBag size={14} />
+                  </button>
 
                   <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-xl border border-gray-100 shrink-0">
                     <button 
