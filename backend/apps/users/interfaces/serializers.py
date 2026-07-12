@@ -24,3 +24,32 @@ class UserCreateSerializer(serializers.ModelSerializer):
         if 'password' in validated_data:
             validated_data['password'] = make_password(validated_data['password'])
         return super().update(instance, validated_data)
+
+from apps.users.infrastructure.models import EmployeeShift
+
+class EmployeeShiftSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source='user.username', read_only=True)
+    full_name = serializers.SerializerMethodField(read_only=True)
+    generated_income = serializers.SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = EmployeeShift
+        fields = ['id', 'user', 'username', 'full_name', 'start_time', 'end_time', 'is_active', 'observations', 'generated_income']
+        read_only_fields = ['id', 'user', 'start_time']
+
+    def get_full_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.username
+        
+    def get_generated_income(self, obj):
+        from apps.orders.infrastructure.models import Order
+        orders = Order.objects.filter(
+            waiter=obj.user,
+            status='Pagada',
+            updated_at__gte=obj.start_time
+        )
+        if obj.end_time:
+            orders = orders.filter(updated_at__lte=obj.end_time)
+            
+        from django.db.models import Sum
+        total = orders.aggregate(total=Sum('total'))['total']
+        return float(total) if total else 0.0

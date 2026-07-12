@@ -2,7 +2,6 @@
 
 > **Para:** Compañero de equipo (Backend Developer)  
 > **Contexto:** El frontend ya está adaptado para recibir los nuevos campos. En cuanto implementes estos cambios, la conexión será automática sin tocar el frontend.  
-> **Stack:** Django 6.0 + Django REST Framework 3.17
 
 ---
 
@@ -445,3 +444,20 @@ Content-Type: application/json
 
 > [!CAUTION]
 > No olvides correr `makemigrations` y `migrate` después de modificar el modelo. Si no lo haces, el servidor dará error al intentar guardar transacciones con los campos nuevos.
+
+
+________________
+El router registra el prefix orders dentro de un path que ya tiene orders, creando el doble. El fix está en el backend — en 
+
+orders/interfaces/urls.py:
+
+# ACTUAL (incorrecto):
+
+router.register(r'orders', OrderViewSet, basename='order')
+router.register(r'order-items', OrderItemViewSet, basename='order-item')
+
+# CORRECTO: el prefix debe ser vacío ' ' porque el core ya pone /api/orders/
+
+router.register(r'', OrderViewSet, basename='order')
+router.register(r'items', OrderItemViewSet, basename='order-item')
+
