@@ -1,5 +1,4 @@
-// src/screens/PedidoScreen.js
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -13,6 +12,7 @@ import {
 } from "react-native";
 import { colors } from "../theme/colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 
 const API_BASE_URL = "http://192.168.0.10:8000";
 
@@ -37,6 +37,7 @@ export default function PedidoScreen({ route, navigation }) {
   const [cargandoPedidoActual, setCargandoPedidoActual] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [vista, setVista] = useState("productos");
+  const [actualizandoMenu, setActualizandoMenu] = useState(false);
 
   const getMesaNumber = () => {
     return mesa?.table_number ?? mesa?.number ?? "";
@@ -214,60 +215,88 @@ export default function PedidoScreen({ route, navigation }) {
     }
   };
 
-  const cargarProductos = async () => {
-    try {
+const cargarProductos = async (mostrarLoading = true) => {
+  try {
+    if (mostrarLoading) {
       setLoading(true);
-
-      const headers = await getAuthHeaders();
-
-      console.log("========== CARGAR PRODUCTOS ==========");
-      console.log("PRODUCTS_URL:", PRODUCTS_URL);
-
-      const response = await fetch(PRODUCTS_URL, {
-        method: "GET",
-        headers,
-      });
-
-      const data = await parseJsonResponse(response, "PRODUCTOS BACKEND");
-
-      if (!response.ok) {
-        throw new Error(JSON.stringify(data));
-      }
-
-      const listaProductos = normalizarLista(data);
-
-      const productosAdaptados = listaProductos.map((producto) => ({
-        id: producto.id,
-        nombre: producto.name ?? producto.nombre ?? `Producto #${producto.id}`,
-        precio: Number(producto.price ?? producto.precio ?? 0),
-        categoria:
-          producto.category_name ??
-          producto.categoria ??
-          "Sin categoría",
-        subcategoria:
-          producto.subcategory_name ??
-          producto.subcategoria ??
-          (producto.subcategory
-            ? `Subcategoría ${producto.subcategory}`
-            : "Sin subcategoría"),
-        status: producto.status,
-        original: producto,
-      }));
-
-      setProductos(productosAdaptados);
-
-      await cargarPedidoPendiente(productosAdaptados);
-    } catch (error) {
-      console.log("Error cargando productos:", error);
-      Alert.alert("Error", "No se pudo cargar el menú del backend.");
-    } finally {
-      setLoading(false);
     }
-  };
 
-  useEffect(() => {
-    cargarProductos();
-  }, []);
+    setActualizandoMenu(true);
+
+    const headers = await getAuthHeaders();
+
+    console.log("========== CARGAR PRODUCTOS ==========");
+    console.log("PRODUCTS_URL:", PRODUCTS_URL);
+
+    const response = await fetch(PRODUCTS_URL, {
+      method: "GET",
+      headers: {
+        ...headers,
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+      },
+    });
+
+    const data = await parseJsonResponse(response, "PRODUCTOS BACKEND");
+
+    if (!response.ok) {
+      throw new Error(JSON.stringify(data));
+    }
+
+    const listaProductos = normalizarLista(data);
+
+    const productosAdaptados = listaProductos.map((producto) => ({
+      id: producto.id,
+      nombre: producto.name ?? producto.nombre ?? `Producto #${producto.id}`,
+      precio: Number(producto.price ?? producto.precio ?? 0),
+      categoria:
+        producto.category_name ??
+        producto.categoria ??
+        "Sin categoría",
+      subcategoria:
+        producto.subcategory_name ??
+        producto.subcategoria ??
+        (producto.subcategory
+          ? `Subcategoría ${producto.subcategory}`
+          : "Sin subcategoría"),
+      status: producto.status,
+      original: producto,
+    }));
+
+    setProductos(productosAdaptados);
+
+    setCarrito((prevCarrito) =>
+      prevCarrito.map((item) => {
+        const productoActualizado = productosAdaptados.find(
+          (producto) => Number(producto.id) === Number(item.producto.id)
+        );
+
+        if (!productoActualizado) {
+          return item;
+        }
+
+        return {
+          ...item,
+          producto: productoActualizado,
+        };
+      })
+    );
+
+    await cargarPedidoPendiente(productosAdaptados);
+  } catch (error) {
+    console.log("Error cargando productos:", error);
+    Alert.alert("Error", "No se pudo cargar el menú actualizado.");
+  } finally {
+    setLoading(false);
+    setActualizandoMenu(false);
+  }
+};
+
+useFocusEffect(
+  useCallback(() => {
+    cargarProductos(true);
+  }, [])
+);
 
   const agregarAlCarrito = (producto) => {
     setCarrito((prev) => {
@@ -513,24 +542,37 @@ export default function PedidoScreen({ route, navigation }) {
           <Text style={styles.backText}>← Mesas</Text>
         </TouchableOpacity>
 
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Mesa {getMesaNumber()}</Text>
+<View style={styles.headerCenter}>
+  <Text style={styles.headerTitle}>Mesa {getMesaNumber()}</Text>
 
-          {ordenPendiente && (
-            <Text style={styles.pedidoBadge}>
-              Pedido #{ordenPendiente.id}
-            </Text>
-          )}
-        </View>
+  {ordenPendiente && (
+    <Text style={styles.pedidoBadge}>
+      Pedido #{ordenPendiente.id}
+    </Text>
+  )}
+</View>
 
-        <TouchableOpacity
-          style={styles.carritoBtn}
-          onPress={() =>
-            setVista(
-              vista === "productos" ? "carrito" : "productos"
-            )
-          }
-        >
+<TouchableOpacity
+  style={[
+    styles.actualizarMenuBtn,
+    actualizandoMenu && styles.actualizarMenuBtnDisabled,
+  ]}
+  onPress={() => cargarProductos(false)}
+  disabled={actualizandoMenu}
+>
+  <Text style={styles.actualizarMenuText}>
+    {actualizandoMenu ? "..." : "Actualizar"}
+  </Text>
+</TouchableOpacity>
+
+<TouchableOpacity
+  style={styles.carritoBtn}
+  onPress={() =>
+    setVista(
+      vista === "productos" ? "carrito" : "productos"
+    )
+  }
+>
           <Text style={styles.carritoText}>
             {vista === "productos"
               ? `🛒 ${cantidadTotal}`
@@ -953,6 +995,23 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
   },
+  actualizarMenuBtn: {
+  backgroundColor: "#EDE9FE",
+  paddingHorizontal: 10,
+  paddingVertical: 6,
+  borderRadius: 18,
+  marginHorizontal: 6,
+},
+
+actualizarMenuBtnDisabled: {
+  opacity: 0.6,
+},
+
+actualizarMenuText: {
+  color: colors.primary,
+  fontSize: 11,
+  fontWeight: "bold",
+},
 
   carritoText: {
     color: colors.white,
