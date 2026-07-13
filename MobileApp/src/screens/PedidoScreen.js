@@ -18,8 +18,51 @@ const API_BASE_URL = "http://192.168.0.10:8000";
 
 const PRODUCTS_URL = `${API_BASE_URL}/api/inventory/products/`;
 const ORDERS_URL = `${API_BASE_URL}/api/orders/orders/`;
+const ORDER_OWNERS_STORAGE_KEY = "orderOwnersById";
 const ORDER_ITEMS_URL = `${API_BASE_URL}/api/orders/order-items/`;
 const TABLES_URL = `${API_BASE_URL}/api/tables/`;
+
+const palette = {
+  light: colors.restaurantLight ?? "#78B9B5",
+  accent:
+    colors.restaurantAccent ??
+    colors.accent ??
+    "#0F828C",
+  primary:
+    colors.restaurantPrimary ??
+    colors.primary ??
+    "#065084",
+  dark:
+    colors.restaurantDark ??
+    colors.dark ??
+    "#320A6B",
+
+  background: colors.background ?? "#F8FAFC",
+  surface: colors.surface ?? colors.white ?? "#FFFFFF",
+  card: colors.card ?? colors.white ?? "#FFFFFF",
+  muted: colors.muted ?? "#E8F3F2",
+
+  text: colors.text ?? "#0F172A",
+  textSecondary: colors.textSecondary ?? "#475569",
+  gray: colors.gray ?? "#64748B",
+  placeholder: colors.placeholder ?? "#94A3B8",
+  border: colors.border ?? "#DCE7E7",
+
+  success: colors.success ?? "#15803D",
+  successBackground:
+    colors.successBackground ?? "#DCFCE7",
+  warning: colors.warning ?? "#B45309",
+  warningBackground:
+    colors.warningBackground ?? "#FEF3C7",
+  danger: colors.danger ?? "#DC2626",
+  dangerBackground:
+    colors.dangerBackground ?? "#FEE2E2",
+  info: colors.info ?? "#065084",
+  infoBackground:
+    colors.infoBackground ?? "#E0F2FE",
+
+  white: colors.white ?? "#FFFFFF",
+};
 
 export default function PedidoScreen({ route, navigation }) {
   const { mesa } = route.params;
@@ -83,6 +126,142 @@ export default function PedidoScreen({ route, navigation }) {
     return [];
   };
 
+  const obtenerUserIdDesdeToken = (token) => {
+    try {
+      if (!token) {
+        return null;
+      }
+
+      const payloadBase64 = token.split(".")[1];
+
+      if (!payloadBase64) {
+        return null;
+      }
+
+      let base64 = payloadBase64
+        .replace(/-/g, "+")
+        .replace(/_/g, "/");
+
+      while (base64.length % 4) {
+        base64 += "=";
+      }
+
+      if (!global.atob) {
+        console.log("global.atob no está disponible");
+        return null;
+      }
+
+      const payload = JSON.parse(global.atob(base64));
+
+      return payload?.user_id
+        ? String(payload.user_id)
+        : null;
+    } catch (error) {
+      console.log("Error leyendo user_id del token:", error);
+      return null;
+    }
+  };
+
+  const obtenerSesionActual = async () => {
+    const token = await AsyncStorage.getItem("accessToken");
+
+    if (!token) {
+      throw new Error("No existe token de autenticación");
+    }
+
+    const userIdGuardado = await AsyncStorage.getItem("userId");
+    const userIdToken = obtenerUserIdDesdeToken(token);
+    const userIdActual = userIdGuardado || userIdToken;
+    const loginUsername = await AsyncStorage.getItem("loginUsername");
+
+    if (!userIdActual) {
+      throw new Error(
+        "No se pudo identificar al usuario activo desde la sesión."
+      );
+    }
+
+    if (!userIdGuardado && userIdToken) {
+      await AsyncStorage.setItem("userId", String(userIdToken));
+    }
+
+    return {
+      token,
+      userId: String(userIdActual),
+      loginUsername: loginUsername || "",
+    };
+  };
+
+  const leerPropietariosLocales = async () => {
+    try {
+      const valor = await AsyncStorage.getItem(
+        ORDER_OWNERS_STORAGE_KEY
+      );
+
+      if (!valor) {
+        return {};
+      }
+
+      const mapa = JSON.parse(valor);
+
+      return mapa && typeof mapa === "object" ? mapa : {};
+    } catch (error) {
+      console.log("Error leyendo propietarios locales:", error);
+      return {};
+    }
+  };
+
+  const guardarPropietarioLocal = async (orderId, userId) => {
+    if (!orderId || !userId) {
+      return;
+    }
+
+    try {
+      const propietarios = await leerPropietariosLocales();
+
+      propietarios[String(orderId)] = String(userId);
+
+      await AsyncStorage.setItem(
+        ORDER_OWNERS_STORAGE_KEY,
+        JSON.stringify(propietarios)
+      );
+
+      console.log("PROPIETARIO LOCAL GUARDADO:", {
+        orderId: String(orderId),
+        userId: String(userId),
+      });
+    } catch (error) {
+      console.log("Error guardando propietario local:", error);
+    }
+  };
+
+  const obtenerIdUsuarioOrden = (order) => {
+    const usuarioOrden =
+      order?.created_by ??
+      order?.created_by_id ??
+      order?.user ??
+      order?.user_id ??
+      order?.waiter ??
+      order?.waiter_id ??
+      order?.cashier ??
+      order?.cashier_id ??
+      order?.employee ??
+      order?.employee_id;
+
+    if (
+      typeof usuarioOrden === "object" &&
+      usuarioOrden !== null
+    ) {
+      return (
+        usuarioOrden.id ??
+        usuarioOrden.user_id ??
+        usuarioOrden.pk ??
+        null
+      );
+    }
+
+    return usuarioOrden ?? null;
+  };
+
   const obtenerDetalleOrden = async (orderId) => {
     const headers = await getAuthHeaders();
 
@@ -106,17 +285,27 @@ export default function PedidoScreen({ route, navigation }) {
 
   const buscarOrdenPendienteDeMesa = async () => {
     const headers = await getAuthHeaders();
+    const sesion = await obtenerSesionActual();
+    const propietariosLocales = await leerPropietariosLocales();
 
     console.log("========== BUSCAR ORDEN PENDIENTE ==========");
     console.log("ORDERS_URL:", ORDERS_URL);
     console.log("MESA ACTUAL:", mesa);
+    console.log("USUARIO ACTUAL:", sesion.userId);
 
     const response = await fetch(ORDERS_URL, {
       method: "GET",
-      headers,
+      headers: {
+        ...headers,
+        "Cache-Control": "no-cache",
+        Pragma: "no-cache",
+      },
     });
 
-    const data = await parseJsonResponse(response, "ORDENES BACKEND");
+    const data = await parseJsonResponse(
+      response,
+      "ORDENES BACKEND"
+    );
 
     if (!response.ok) {
       throw new Error(JSON.stringify(data));
@@ -134,13 +323,54 @@ export default function PedidoScreen({ route, navigation }) {
         order.mesa ??
         order.table_id;
 
+      const usuarioBackend = obtenerIdUsuarioOrden(order);
+      const usuarioLocal =
+        propietariosLocales[String(order.id)] ?? null;
+
+      const usuarioOrden =
+        usuarioBackend ?? usuarioLocal;
+
+      const coincideMesa =
+        Number(mesaOrden) === Number(mesa.id);
+
+      const estaPendiente =
+        String(order.status || "").toLowerCase() ===
+        "pendiente";
+
+      const perteneceAlUsuario =
+        usuarioOrden !== null &&
+        usuarioOrden !== undefined &&
+        String(usuarioOrden) === String(sesion.userId);
+
+      const esOrdenActivaSinPropietario =
+        !usuarioOrden &&
+        mesa?.activeOrderId &&
+        Number(order.id) === Number(mesa.activeOrderId);
+
       return (
-        Number(mesaOrden) === Number(mesa.id) &&
-        order.status === "Pendiente"
+        coincideMesa &&
+        estaPendiente &&
+        (perteneceAlUsuario || esOrdenActivaSinPropietario)
       );
     });
 
-    console.log("ORDEN PENDIENTE ENCONTRADA:", ordenPendienteEncontrada);
+    if (
+      ordenPendienteEncontrada &&
+      !obtenerIdUsuarioOrden(ordenPendienteEncontrada) &&
+      !propietariosLocales[
+        String(ordenPendienteEncontrada.id)
+      ]
+    ) {
+      await guardarPropietarioLocal(
+        ordenPendienteEncontrada.id,
+        sesion.userId
+      );
+    }
+
+    console.log(
+      "ORDEN PENDIENTE DEL USUARIO:",
+      ordenPendienteEncontrada
+    );
     console.log("===========================================");
 
     return ordenPendienteEncontrada || null;
@@ -413,13 +643,26 @@ useFocusEffect(
               let orden = await buscarOrdenPendienteDeMesa();
 
               if (!orden) {
+                const sesion = await obtenerSesionActual();
+                const userIdNumerico = Number(sesion.userId);
+
                 const orderData = {
                   table: mesa.id,
                   customer_name: mesa.customerName || "",
+
+                  // Se envían los nombres más comunes para que el
+                  // serializer use el campo que exista en el backend.
+                  created_by: userIdNumerico,
+                  user: userIdNumerico,
+                  waiter: userIdNumerico,
                 };
 
                 console.log("========== CREAR ORDEN ==========");
                 console.log("URL CREAR ORDEN:", ORDERS_URL);
+                console.log(
+                  "USUARIO QUE CREA LA ORDEN:",
+                  sesion.userId
+                );
                 console.log("PAYLOAD ORDEN:", orderData);
 
                 const orderResponse = await fetch(ORDERS_URL, {
@@ -434,10 +677,40 @@ useFocusEffect(
                 );
 
                 if (!orderResponse.ok) {
-                  throw new Error(JSON.stringify(orderDataResponse));
+                  throw new Error(
+                    JSON.stringify(orderDataResponse)
+                  );
                 }
 
                 orden = orderDataResponse;
+
+                await guardarPropietarioLocal(
+                  orden.id,
+                  sesion.userId
+                );
+
+                const usuarioDevuelto =
+                  obtenerIdUsuarioOrden(orden);
+
+                console.log("ORDEN CREADA COMPLETA:", orden);
+                console.log(
+                  "USUARIO DEVUELTO POR BACKEND:",
+                  usuarioDevuelto
+                );
+
+                if (!usuarioDevuelto) {
+                  console.log(
+                    "AVISO: el backend no devolvió propietario; " +
+                      "se usará el respaldo local orderOwnersById."
+                  );
+                }
+              } else {
+                const sesion = await obtenerSesionActual();
+
+                await guardarPropietarioLocal(
+                  orden.id,
+                  sesion.userId
+                );
               }
 
               for (const item of carrito) {
@@ -497,7 +770,7 @@ useFocusEffect(
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={palette.primary} />
       </View>
     );
   }
@@ -753,7 +1026,7 @@ useFocusEffect(
             <View style={styles.loadingPedidoBox}>
               <ActivityIndicator
                 size="small"
-                color={colors.primary}
+                color={palette.primary}
               />
               <Text style={styles.loadingPedidoText}>
                 Cargando pedido actual...
@@ -866,7 +1139,7 @@ useFocusEffect(
                   <TextInput
                     style={styles.notaInput}
                     placeholder="Nota (ej: sin cebolla)"
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={palette.placeholder}
                     value={item.notas}
                     onChangeText={(texto) =>
                       actualizarNota(item.producto.id, texto)
@@ -927,7 +1200,7 @@ useFocusEffect(
             disabled={enviando}
           >
             {enviando ? (
-              <ActivityIndicator color={colors.white} />
+              <ActivityIndicator color={palette.white} />
             ) : (
               <Text style={styles.enviarBtnText}>
                 {ordenPendiente
@@ -945,129 +1218,159 @@ useFocusEffect(
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.lightGray,
+    backgroundColor: palette.background,
   },
 
   centered: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: palette.background,
   },
 
   header: {
-    backgroundColor: colors.dark,
+    backgroundColor: palette.primary,
     paddingTop: 48,
-    paddingBottom: 16,
-    paddingHorizontal: 16,
+    paddingBottom: 14,
+    paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    borderBottomWidth: 4,
+    borderBottomColor: palette.accent,
+    elevation: 4,
   },
 
   backBtn: {
-    padding: 4,
+    minHeight: 40,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: palette.dark,
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: palette.light,
   },
 
   backText: {
-    color: colors.secondary,
-    fontSize: 14,
+    color: palette.white,
+    fontSize: 13,
+    fontWeight: "700",
   },
 
   headerCenter: {
+    flex: 1,
     alignItems: "center",
+    paddingHorizontal: 6,
   },
 
   headerTitle: {
-    color: colors.white,
+    color: palette.white,
     fontSize: 20,
-    fontWeight: "bold",
+    fontWeight: "800",
   },
 
   pedidoBadge: {
-    color: "#DDD6FE",
+    color: palette.light,
     fontSize: 11,
-    marginTop: 2,
+    marginTop: 3,
+    fontWeight: "600",
   },
 
   carritoBtn: {
-    backgroundColor: colors.primary,
+    backgroundColor: palette.accent,
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 9,
     borderRadius: 20,
+    minWidth: 72,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: palette.light,
   },
+
   actualizarMenuBtn: {
-  backgroundColor: "#EDE9FE",
-  paddingHorizontal: 10,
-  paddingVertical: 6,
-  borderRadius: 18,
-  marginHorizontal: 6,
-},
+    backgroundColor: palette.light,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderRadius: 18,
+    marginHorizontal: 6,
+    borderWidth: 1,
+    borderColor: palette.white,
+  },
 
-actualizarMenuBtnDisabled: {
-  opacity: 0.6,
-},
+  actualizarMenuBtnDisabled: {
+    opacity: 0.6,
+  },
 
-actualizarMenuText: {
-  color: colors.primary,
-  fontSize: 11,
-  fontWeight: "bold",
-},
+  actualizarMenuText: {
+    color: palette.primary,
+    fontSize: 11,
+    fontWeight: "800",
+  },
 
   carritoText: {
-    color: colors.white,
-    fontSize: 13,
-    fontWeight: "600",
+    color: palette.white,
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   list: {
     padding: 16,
+    paddingBottom: 24,
   },
 
   categoriaCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 14,
+    backgroundColor: palette.card,
+    borderRadius: 16,
     padding: 18,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: palette.border,
+    borderLeftWidth: 5,
+    borderLeftColor: palette.accent,
+    elevation: 2,
   },
 
   categoriaNombre: {
     fontSize: 18,
-    fontWeight: "bold",
-    color: "#111827",
+    fontWeight: "800",
+    color: palette.text,
   },
 
   categoriaHint: {
     fontSize: 13,
-    color: "#6B7280",
-    marginTop: 4,
+    color: palette.primary,
+    marginTop: 5,
+    fontWeight: "600",
   },
 
   volverNivelBtn: {
     marginHorizontal: 16,
     marginTop: 12,
-    backgroundColor: "#E5E7EB",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 10,
+    backgroundColor: palette.muted,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.border,
   },
 
   volverNivelText: {
-    color: "#374151",
-    fontWeight: "bold",
+    color: palette.primary,
+    fontWeight: "800",
   },
 
   productoCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    backgroundColor: palette.card,
+    borderRadius: 14,
     padding: 14,
-    marginBottom: 10,
+    marginBottom: 11,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: "#E5E7EB",
+    borderColor: palette.border,
+    elevation: 1,
   },
 
   productoInfo: {
@@ -1077,39 +1380,39 @@ actualizarMenuText: {
 
   productoNombre: {
     fontSize: 17,
-    fontWeight: "bold",
-    color: "#111827",
+    fontWeight: "800",
+    color: palette.text,
   },
 
   productoPrecio: {
     fontSize: 15,
-    color: "#0F828C",
-    marginTop: 4,
-    fontWeight: "600",
+    color: palette.accent,
+    marginTop: 5,
+    fontWeight: "800",
   },
 
   productoCategoria: {
     fontSize: 13,
-    color: "#6B7280",
-    marginTop: 2,
+    color: palette.textSecondary,
+    marginTop: 3,
   },
 
   productoSubcategoria: {
     fontSize: 12,
-    color: "#9CA3AF",
+    color: palette.gray,
     marginTop: 2,
   },
 
   addBtn: {
-    backgroundColor: colors.primary,
+    backgroundColor: palette.primary,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingVertical: 9,
+    borderRadius: 10,
   },
 
   addBtnText: {
-    color: colors.white,
-    fontWeight: "600",
+    color: palette.white,
+    fontWeight: "700",
     fontSize: 13,
   },
 
@@ -1120,163 +1423,177 @@ actualizarMenuText: {
   },
 
   ctrlBtn: {
-    backgroundColor: colors.lightGray,
-    width: 30,
-    height: 30,
-    borderRadius: 8,
+    backgroundColor: palette.muted,
+    width: 32,
+    height: 32,
+    borderRadius: 9,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: palette.border,
   },
 
   ctrlBtnText: {
-    fontSize: 18,
-    color: colors.dark,
+    fontSize: 19,
+    color: palette.dark,
     fontWeight: "bold",
   },
 
   cantidadNum: {
     fontSize: 16,
-    fontWeight: "bold",
-    color: colors.dark,
-    minWidth: 20,
+    fontWeight: "800",
+    color: palette.dark,
+    minWidth: 22,
     textAlign: "center",
   },
 
   loadingPedidoBox: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
+    backgroundColor: palette.card,
+    borderRadius: 14,
     padding: 18,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: palette.border,
   },
 
   loadingPedidoText: {
     marginTop: 8,
-    color: "#6B7280",
+    color: palette.gray,
   },
 
   pedidoActualBox: {
-    backgroundColor: "#ECFDF5",
-    borderRadius: 14,
+    backgroundColor: palette.muted,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#A7F3D0",
-    padding: 14,
+    borderColor: palette.light,
+    padding: 15,
     marginBottom: 16,
   },
 
   sectionTitle: {
     fontSize: 17,
-    fontWeight: "bold",
-    color: "#111827",
+    fontWeight: "800",
+    color: palette.text,
     marginBottom: 4,
   },
 
   sectionSubtitle: {
     fontSize: 12,
-    color: "#047857",
+    color: palette.accent,
     marginBottom: 12,
+    fontWeight: "700",
   },
 
   pedidoActualItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 9,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#D1FAE5",
+    borderBottomColor: palette.border,
   },
 
   pedidoActualNombre: {
-    color: "#111827",
+    color: palette.text,
     fontSize: 15,
-    fontWeight: "600",
+    fontWeight: "700",
   },
 
   pedidoActualCantidad: {
-    color: "#6B7280",
+    color: palette.gray,
     fontSize: 12,
     marginTop: 2,
   },
 
   pedidoActualPrecio: {
-    color: "#047857",
-    fontWeight: "bold",
+    color: palette.accent,
+    fontWeight: "800",
     fontSize: 14,
   },
 
   pedidoActualTotalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 12,
+    marginTop: 13,
   },
 
   pedidoActualTotalLabel: {
-    color: "#065F46",
+    color: palette.primary,
     fontSize: 15,
-    fontWeight: "bold",
+    fontWeight: "800",
   },
 
   pedidoActualTotalValue: {
-    color: "#047857",
-    fontSize: 16,
-    fontWeight: "bold",
+    color: palette.accent,
+    fontSize: 17,
+    fontWeight: "800",
   },
 
   sinPedidoBox: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: palette.card,
+    borderRadius: 14,
+    padding: 17,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: palette.border,
   },
 
   sinPedidoText: {
-    color: "#6B7280",
+    color: palette.gray,
     textAlign: "center",
   },
 
   carritoItem: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
+    backgroundColor: palette.card,
+    borderRadius: 14,
+    padding: 15,
+    marginBottom: 11,
     elevation: 1,
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderLeftWidth: 4,
+    borderLeftColor: palette.primary,
   },
 
   carritoItemTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 5,
   },
 
   carritoNombre: {
     fontSize: 15,
-    fontWeight: "700",
-    color: "#111827",
+    fontWeight: "800",
+    color: palette.text,
     flex: 1,
     marginRight: 10,
   },
 
   carritoSubtotal: {
     fontSize: 14,
-    color: colors.primary,
-    marginBottom: 8,
+    color: palette.accent,
+    marginBottom: 9,
+    fontWeight: "700",
   },
 
   notaInput: {
     borderWidth: 1,
-    borderColor: "#D1D5DB",
-    borderRadius: 8,
+    borderColor: palette.border,
+    borderRadius: 10,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 9,
     fontSize: 13,
-    color: "#111827",
-    backgroundColor: colors.lightGray,
+    color: palette.text,
+    backgroundColor: palette.background,
   },
 
   totalBox: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
+    backgroundColor: palette.card,
+    borderRadius: 15,
     padding: 16,
     marginTop: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
   },
 
   totalLine: {
@@ -1287,48 +1604,51 @@ actualizarMenuText: {
 
   totalLabel: {
     fontSize: 14,
-    color: "#4B5563",
+    color: palette.textSecondary,
   },
 
   totalValue: {
     fontSize: 14,
-    color: "#111827",
-    fontWeight: "bold",
+    color: palette.text,
+    fontWeight: "800",
   },
 
   totalGeneralLine: {
     flexDirection: "row",
     justifyContent: "space-between",
     borderTopWidth: 1,
-    borderTopColor: "#E5E7EB",
-    paddingTop: 12,
+    borderTopColor: palette.border,
+    paddingTop: 13,
     marginTop: 4,
   },
 
   totalGeneralLabel: {
     fontSize: 16,
-    color: colors.dark,
-    fontWeight: "bold",
+    color: palette.primary,
+    fontWeight: "800",
   },
 
   totalGeneralValue: {
-    fontSize: 18,
-    color: colors.accent,
-    fontWeight: "bold",
+    fontSize: 19,
+    color: palette.accent,
+    fontWeight: "800",
   },
 
   footer: {
     padding: 16,
-    backgroundColor: colors.white,
+    backgroundColor: palette.surface,
     borderTopWidth: 1,
-    borderColor: "#EEEEEE",
+    borderColor: palette.border,
   },
 
   enviarBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
+    backgroundColor: palette.accent,
+    borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: palette.light,
+    elevation: 2,
   },
 
   btnDisabled: {
@@ -1336,14 +1656,14 @@ actualizarMenuText: {
   },
 
   enviarBtnText: {
-    color: colors.white,
+    color: palette.white,
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "800",
   },
 
   emptyText: {
     textAlign: "center",
-    color: colors.secondary,
+    color: palette.gray,
     marginTop: 40,
     fontSize: 15,
   },

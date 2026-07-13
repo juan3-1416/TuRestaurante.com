@@ -6,6 +6,7 @@ import LoginScreen from '../screens/LoginScreen';
 import MesasScreen from '../screens/MesasScreen';
 import PedidoScreen from '../screens/PedidoScreen';
 import HistorialOrdenesScreen from '../screens/HistorialOrdenesScreen';
+import PedidosPendientesScreen from "../screens/PedidosPendientesScreen";
 
 const Stack = createStackNavigator();
 
@@ -20,6 +21,10 @@ export default function AppNavigator() {
         <Stack.Screen name="Mesas" component={MesasScreen} />
         <Stack.Screen name="Pedido" component={PedidoScreen} />
         <Stack.Screen name="HistorialOrdenes" component={HistorialOrdenesScreen} />
+        <Stack.Screen
+  name="PedidosPendientes"
+  component={PedidosPendientesScreen}
+/>
       </Stack.Navigator>
     </NavigationContainer>
   );

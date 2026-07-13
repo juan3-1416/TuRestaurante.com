@@ -6,6 +6,18 @@ from apps.tables.infrastructure.models import Table
 from apps.orders.infrastructure.models import Order, OrderItem
 from apps.inventory.infrastructure.models import Product
 from .serializers import TableSerializer
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+
+def broadcast_table_update(table_id):
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        "restaurant_tables",
+        {
+            "type": "broadcast_update",
+            "table_id": table_id
+        }
+    )
 
 class TableViewSet(viewsets.ModelViewSet):
     queryset = Table.objects.all()
@@ -20,6 +32,7 @@ class TableViewSet(viewsets.ModelViewSet):
         table.is_active = False
         table.status = 'Libre'
         table.save()
+        broadcast_table_update(table.id)
         return Response(status=204)
 
     def create(self, request, *args, **kwargs):
@@ -39,10 +52,14 @@ class TableViewSet(viewsets.ModelViewSet):
                 if capacity:
                     existing_table.capacity = capacity
                 existing_table.save()
+                broadcast_table_update(existing_table.id)
                 serializer = self.get_serializer(existing_table)
                 return Response(serializer.data, status=200)
                 
-        return super().create(request, *args, **kwargs)
+        response = super().create(request, *args, **kwargs)
+        if response.status_code == 201:
+            broadcast_table_update(response.data.get('id'))
+        return response
 
     @action(detail=True, methods=['patch'])
     def update_status(self, request, pk=None):
@@ -115,6 +132,7 @@ class TableViewSet(viewsets.ModelViewSet):
         if hasattr(table, '_active_order'):
             delattr(table, '_active_order')
             
+        broadcast_table_update(table.id)
         return Response({'status': 'Estado actualizado', 'table': TableSerializer(table).data})
 
     @action(detail=True, methods=['patch'])
@@ -133,6 +151,7 @@ class TableViewSet(viewsets.ModelViewSet):
         order.observation_note = f"[{request.user.username}] {note}"
         order.save()
         
+        broadcast_table_update(table.id)
         return Response({'status': 'Fuga reportada', 'table': TableSerializer(table).data})
 
     @action(detail=True, methods=['patch'])
@@ -152,5 +171,6 @@ class TableViewSet(viewsets.ModelViewSet):
             order.observation_note = (order.observation_note or '') + f" | Resuelto por {request.user.username}"
             order.save()
             
+        broadcast_table_update(table.id)
         return Response({'status': 'Fuga resuelta', 'table': TableSerializer(table).data})
 
