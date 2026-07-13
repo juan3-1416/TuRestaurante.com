@@ -8,6 +8,7 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
+  TextInput,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import { colors } from "../theme/colors";
@@ -16,6 +17,11 @@ import { useFocusEffect } from "@react-navigation/native";
 
 const API_URL = "http://192.168.0.10:8000/api/tables/";
 const USERS_URL = "http://192.168.0.10:8000/api/users/";
+const SHIFTS_URL = "http://192.168.0.10:8000/api/users/shifts/";
+const SHIFT_START_URL =
+  "http://192.168.0.10:8000/api/users/shifts/start/";
+const SHIFT_END_URL =
+  "http://192.168.0.10:8000/api/users/shifts/end/";
 
 const palette = {
   light: colors.restaurantLight ?? "#78B9B5",
@@ -68,6 +74,14 @@ export default function MesasScreen({ navigation }) {
   const [menuVisible, setMenuVisible] = useState(false);
   const [userName, setUserName] = useState("Administrador");
   const [userEmail, setUserEmail] = useState("Sesión activa");
+
+  const [turnoActivo, setTurnoActivo] = useState(false);
+  const [turnoActual, setTurnoActual] = useState(null);
+  const [cargandoTurno, setCargandoTurno] = useState(true);
+  const [procesandoTurno, setProcesandoTurno] = useState(false);
+  const [modalCerrarTurnoVisible, setModalCerrarTurnoVisible] =
+    useState(false);
+  const [observacionesTurno, setObservacionesTurno] = useState("");
 
   const getTableNumber = (mesa) => {
     return mesa?.table_number ?? mesa?.number ?? "";
@@ -275,6 +289,488 @@ const cargarPerfil = async () => {
   }
 };
 
+  const normalizarTurnos = (data) => {
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    if (Array.isArray(data?.results)) {
+      return data.results;
+    }
+
+    return [];
+  };
+
+
+  const obtenerPropietarioTurno = (turno) => {
+    const candidato =
+      turno?.user ??
+      turno?.user_id ??
+      turno?.employee ??
+      turno?.employee_id ??
+      turno?.waiter ??
+      turno?.waiter_id ??
+      turno?.created_by ??
+      turno?.created_by_id ??
+      turno?.staff ??
+      turno?.staff_id;
+
+    if (
+      typeof candidato === "object" &&
+      candidato !== null
+    ) {
+      return {
+        id:
+          candidato.id ??
+          candidato.user_id ??
+          candidato.pk ??
+          null,
+        username:
+          candidato.username ??
+          candidato.email ??
+          candidato.user_name ??
+          "",
+      };
+    }
+
+    return {
+      id:
+        candidato !== null &&
+        candidato !== undefined
+          ? candidato
+          : null,
+      username:
+        turno?.username ??
+        turno?.user_name ??
+        turno?.user_email ??
+        turno?.employee_email ??
+        "",
+    };
+  };
+
+  const turnoPerteneceAlUsuario = (
+    turno,
+    userIdActual,
+    usernameActual
+  ) => {
+    const propietario = obtenerPropietarioTurno(turno);
+
+    const coincideId =
+      propietario.id !== null &&
+      propietario.id !== undefined &&
+      userIdActual &&
+      String(propietario.id) === String(userIdActual);
+
+    const coincideUsername =
+      propietario.username &&
+      usernameActual &&
+      String(propietario.username).toLowerCase() ===
+        String(usernameActual).toLowerCase();
+
+    return coincideId || coincideUsername;
+  };
+
+  const parseJsonSeguro = async (response, contexto) => {
+    const text = await response.text();
+
+    console.log(`STATUS ${contexto}:`, response.status);
+    console.log(`RESPUESTA ${contexto}:`, text);
+
+    if (!text) {
+      return {};
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      throw new Error(
+        `El servidor no devolvió JSON en ${contexto}. ` +
+          `Estado: ${response.status}. Respuesta: ${text}`
+      );
+    }
+  };
+
+  const obtenerMensajeBackend = (data, mensajeDefault) => {
+    if (typeof data === "string" && data.trim()) {
+      return data;
+    }
+
+    if (data?.detail) {
+      return String(data.detail);
+    }
+
+    if (data?.error) {
+      return String(data.error);
+    }
+
+    if (data?.message) {
+      return String(data.message);
+    }
+
+    if (data && typeof data === "object") {
+      const primerValor = Object.values(data)[0];
+
+      if (Array.isArray(primerValor) && primerValor.length > 0) {
+        return String(primerValor[0]);
+      }
+
+      if (typeof primerValor === "string") {
+        return primerValor;
+      }
+    }
+
+    return mensajeDefault;
+  };
+
+  const formatearFechaHora = (valor) => {
+    if (!valor) {
+      return "Hora no disponible";
+    }
+
+    const fecha = new Date(valor);
+
+    if (Number.isNaN(fecha.getTime())) {
+      return String(valor);
+    }
+
+    return fecha.toLocaleString();
+  };
+
+  const cargarEstadoTurno = async (mostrarCarga = true) => {
+    const tokenConsulta = await AsyncStorage.getItem(
+      "accessToken"
+    );
+
+    try {
+      if (mostrarCarga) {
+        setCargandoTurno(true);
+      }
+
+      // Evita mostrar temporalmente el turno del usuario anterior.
+      setTurnoActivo(false);
+      setTurnoActual(null);
+
+      if (!tokenConsulta) {
+        throw new Error("No existe token de autenticación");
+      }
+
+      const userIdGuardado = await AsyncStorage.getItem(
+        "userId"
+      );
+
+      const userIdToken =
+        obtenerUserIdDesdeToken(tokenConsulta);
+
+      const userIdActual =
+        userIdGuardado || userIdToken;
+
+      const loginUsername = await AsyncStorage.getItem(
+        "loginUsername"
+      );
+
+      if (!userIdActual && !loginUsername) {
+        throw new Error(
+          "No se pudo identificar al usuario activo."
+        );
+      }
+
+      const headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${tokenConsulta}`,
+      };
+
+      const response = await fetch(SHIFTS_URL, {
+        method: "GET",
+        headers: {
+          ...headers,
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      });
+
+      const data = await parseJsonSeguro(
+        response,
+        "ESTADO TURNO"
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          obtenerMensajeBackend(
+            data,
+            "No se pudo consultar el estado del turno."
+          )
+        );
+      }
+
+      // Si el usuario cambió durante la petición, se ignora
+      // completamente la respuesta del token anterior.
+      const tokenActual = await AsyncStorage.getItem(
+        "accessToken"
+      );
+
+      if (tokenActual !== tokenConsulta) {
+        console.log(
+          "RESPUESTA DE TURNOS IGNORADA: LA SESIÓN CAMBIÓ"
+        );
+        return;
+      }
+
+      const todosLosTurnos = normalizarTurnos(data);
+
+      const respuestaExponePropietario =
+        todosLosTurnos.some((turno) => {
+          const propietario =
+            obtenerPropietarioTurno(turno);
+
+          return (
+            propietario.id !== null &&
+            propietario.id !== undefined
+          ) || Boolean(propietario.username);
+        });
+
+      const turnosDelUsuario =
+        respuestaExponePropietario
+          ? todosLosTurnos.filter((turno) =>
+              turnoPerteneceAlUsuario(
+                turno,
+                userIdActual,
+                loginUsername
+              )
+            )
+          : todosLosTurnos;
+
+      if (
+        !respuestaExponePropietario &&
+        todosLosTurnos.length > 0
+      ) {
+        console.log(
+          "ADVERTENCIA TURNOS: el backend no devuelve " +
+            "el propietario del turno. Se confía en que " +
+            "GET /api/users/shifts/ esté filtrado por request.user."
+        );
+      }
+
+      const turnosOrdenados = [...turnosDelUsuario].sort(
+        (a, b) => {
+          const fechaA = new Date(
+            a?.start_time || a?.created_at || 0
+          ).getTime();
+
+          const fechaB = new Date(
+            b?.start_time || b?.created_at || 0
+          ).getTime();
+
+          return fechaB - fechaA;
+        }
+      );
+
+      const turnoAbierto =
+        turnosOrdenados.find(
+          (turno) => turno?.is_active === true
+        ) || null;
+
+      const ultimoTurno =
+        turnoAbierto || turnosOrdenados[0] || null;
+
+      console.log("USUARIO CONSULTANDO TURNOS:", {
+        userIdActual,
+        loginUsername,
+      });
+      console.log(
+        "TOTAL TURNOS RECIBIDOS:",
+        todosLosTurnos.length
+      );
+      console.log(
+        "TURNOS DEL USUARIO ACTUAL:",
+        turnosDelUsuario
+      );
+      console.log(
+        "TURNO ACTIVO DEL USUARIO:",
+        turnoAbierto
+      );
+
+      setTurnoActivo(Boolean(turnoAbierto));
+      setTurnoActual(ultimoTurno);
+    } catch (error) {
+      console.log("Error consultando turno:", error);
+
+      setTurnoActivo(false);
+      setTurnoActual(null);
+    } finally {
+      const tokenActual = await AsyncStorage.getItem(
+        "accessToken"
+      );
+
+      if (tokenActual === tokenConsulta) {
+        setCargandoTurno(false);
+      }
+    }
+  };
+
+  const iniciarTurno = async () => {
+    if (turnoActivo || procesandoTurno) {
+      return;
+    }
+
+    Alert.alert(
+      "Iniciar turno",
+      "¿Confirmas que estás listo para comenzar tu jornada?",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Iniciar",
+          onPress: async () => {
+            try {
+              setProcesandoTurno(true);
+
+              const headers = await getAuthHeaders();
+
+              const response = await fetch(SHIFT_START_URL, {
+                method: "POST",
+                headers,
+              });
+
+              const data = await parseJsonSeguro(
+                response,
+                "INICIAR TURNO"
+              );
+
+              if (!response.ok) {
+                throw new Error(
+                  obtenerMensajeBackend(
+                    data,
+                    "No se pudo iniciar el turno."
+                  )
+                );
+              }
+
+              setTurnoActivo(true);
+              setTurnoActual(data);
+
+              Alert.alert(
+                "Turno iniciado",
+                data?.start_time
+                  ? `Inicio registrado: ${formatearFechaHora(
+                      data.start_time
+                    )}`
+                  : "Tu turno fue iniciado correctamente."
+              );
+
+              await cargarEstadoTurno(false);
+            } catch (error) {
+              console.log("Error iniciando turno:", error);
+
+              Alert.alert(
+                "No se pudo iniciar",
+                error?.message ||
+                  "Ocurrió un error al iniciar el turno."
+              );
+
+              await cargarEstadoTurno(false);
+            } finally {
+              setProcesandoTurno(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const abrirModalCerrarTurno = () => {
+    if (!turnoActivo || procesandoTurno) {
+      return;
+    }
+
+    setObservacionesTurno("");
+    setModalCerrarTurnoVisible(true);
+  };
+
+  const cerrarModalTurno = () => {
+    if (procesandoTurno) {
+      return;
+    }
+
+    setModalCerrarTurnoVisible(false);
+    setObservacionesTurno("");
+  };
+
+  const cerrarTurno = async () => {
+    if (!turnoActivo || procesandoTurno) {
+      return;
+    }
+
+    try {
+      setProcesandoTurno(true);
+
+      const headers = await getAuthHeaders();
+      const observaciones = observacionesTurno.trim();
+
+      const opciones = {
+        method: "POST",
+        headers,
+      };
+
+      if (observaciones) {
+        opciones.body = JSON.stringify({
+          observations: observaciones,
+        });
+      }
+
+      const response = await fetch(
+        SHIFT_END_URL,
+        opciones
+      );
+
+      const data = await parseJsonSeguro(
+        response,
+        "CERRAR TURNO"
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          obtenerMensajeBackend(
+            data,
+            "No se pudo cerrar el turno."
+          )
+        );
+      }
+
+      setModalCerrarTurnoVisible(false);
+      setObservacionesTurno("");
+      setTurnoActivo(false);
+      setTurnoActual(data);
+
+      Alert.alert(
+        "Turno cerrado",
+        "Tu jornada fue registrada correctamente."
+      );
+
+      await cargarEstadoTurno(false);
+    } catch (error) {
+      console.log("Error cerrando turno:", error);
+
+      Alert.alert(
+        "No se pudo cerrar",
+        error?.message ||
+          "Ocurrió un error al cerrar el turno."
+      );
+
+      await cargarEstadoTurno(false);
+    } finally {
+      setProcesandoTurno(false);
+    }
+  };
+
+  const refrescarPantalla = async () => {
+    await Promise.all([
+      cargarMesas(),
+      cargarEstadoTurno(false),
+    ]);
+  };
+
   const cargarMesas = async () => {
     try {
       setLoading(true);
@@ -331,8 +827,14 @@ useFocusEffect(
   useCallback(() => {
     cargarPerfil();
     cargarMesas();
+    cargarEstadoTurno();
   }, [])
 );
+
+  const irPedidosPendientes = () => {
+    setMenuVisible(false);
+    navigation.navigate("PedidosPendientes");
+  };
 
   const irHistorial = () => {
     setMenuVisible(false);
@@ -363,6 +865,12 @@ await AsyncStorage.multiRemove([
   "loginUsername",
 ]);
 
+              setTurnoActivo(false);
+              setTurnoActual(null);
+              setCargandoTurno(true);
+              setProcesandoTurno(false);
+              setModalCerrarTurnoVisible(false);
+              setObservacionesTurno("");
               setMenuVisible(false);
 
               navigation.reset({
@@ -657,6 +1165,112 @@ await AsyncStorage.multiRemove([
   return (
     <>
       <Modal
+        visible={modalCerrarTurnoVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={cerrarModalTurno}
+      >
+        <View style={styles.shiftModalOverlay}>
+          <View style={styles.shiftModalCard}>
+            <View style={styles.shiftModalHeader}>
+              <View style={styles.shiftModalTitleRow}>
+                <View style={styles.shiftModalIcon}>
+                  <Icon
+                    name="log-out"
+                    size={21}
+                    color={palette.white}
+                  />
+                </View>
+
+                <View style={styles.shiftModalTitleBox}>
+                  <Text style={styles.shiftModalTitle}>
+                    Cerrar turno
+                  </Text>
+
+                  <Text style={styles.shiftModalSubtitle}>
+                    Finaliza tu jornada como mesero
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.shiftModalClose}
+                onPress={cerrarModalTurno}
+                disabled={procesandoTurno}
+              >
+                <Icon
+                  name="x"
+                  size={21}
+                  color={palette.primary}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.shiftObservationLabel}>
+              Observación opcional
+            </Text>
+
+            <TextInput
+              style={styles.shiftObservationInput}
+              placeholder="Ej.: Entregué las mesas pendientes al siguiente turno"
+              placeholderTextColor={palette.placeholder}
+              value={observacionesTurno}
+              onChangeText={setObservacionesTurno}
+              editable={!procesandoTurno}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              maxLength={500}
+            />
+
+            <Text style={styles.shiftObservationCounter}>
+              {observacionesTurno.length}/500
+            </Text>
+
+            <View style={styles.shiftModalActions}>
+              <TouchableOpacity
+                style={styles.shiftCancelButton}
+                onPress={cerrarModalTurno}
+                disabled={procesandoTurno}
+              >
+                <Text style={styles.shiftCancelText}>
+                  Cancelar
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.shiftEndConfirmButton,
+                  procesandoTurno &&
+                    styles.shiftButtonDisabled,
+                ]}
+                onPress={cerrarTurno}
+                disabled={procesandoTurno}
+              >
+                {procesandoTurno ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={palette.white}
+                  />
+                ) : (
+                  <>
+                    <Icon
+                      name="square"
+                      size={17}
+                      color={palette.white}
+                    />
+                    <Text style={styles.shiftEndConfirmText}>
+                      Cerrar turno
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
         visible={menuVisible}
         transparent
         animationType="fade"
@@ -686,6 +1300,30 @@ await AsyncStorage.multiRemove([
 
               <Text style={styles.drawerName}>{userName}</Text>
               <Text style={styles.drawerEmail}>{userEmail}</Text>
+
+              <View
+                style={[
+                  styles.drawerShiftBadge,
+                  turnoActivo
+                    ? styles.drawerShiftBadgeActive
+                    : styles.drawerShiftBadgeInactive,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.drawerShiftDot,
+                    turnoActivo
+                      ? styles.drawerShiftDotActive
+                      : styles.drawerShiftDotInactive,
+                  ]}
+                />
+
+                <Text style={styles.drawerShiftText}>
+                  {turnoActivo
+                    ? "Turno activo"
+                    : "Sin turno activo"}
+                </Text>
+              </View>
             </View>
 
             <View style={styles.drawerMenu}>
@@ -699,9 +1337,27 @@ await AsyncStorage.multiRemove([
 
               <TouchableOpacity
                 style={styles.drawerItem}
+                onPress={irPedidosPendientes}
+              >
+                <Icon
+                  name="clipboard"
+                  size={21}
+                  color={palette.primary}
+                />
+                <Text style={styles.drawerItemText}>
+                  Pedidos pendientes
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.drawerItem}
                 onPress={irHistorial}
               >
-                <Icon name="clock" size={21} color={palette.primary} />
+                <Icon
+                  name="clock"
+                  size={21}
+                  color={palette.primary}
+                />
                 <Text style={styles.drawerItemText}>
                   Historial de ventas
                 </Text>
@@ -734,8 +1390,8 @@ await AsyncStorage.multiRemove([
 
           <TouchableOpacity
             style={styles.refreshBtn}
-            onPress={cargarMesas}
-            disabled={loading}
+            onPress={refrescarPantalla}
+            disabled={loading || procesandoTurno}
           >
             <Icon name="refresh-cw" size={18} color={palette.primary} />
           </TouchableOpacity>
@@ -745,8 +1401,128 @@ await AsyncStorage.multiRemove([
           </TouchableOpacity>
         </View>
 
+        <View
+          style={[
+            styles.shiftCard,
+            turnoActivo
+              ? styles.shiftCardActive
+              : styles.shiftCardInactive,
+          ]}
+        >
+          <View style={styles.shiftCardTop}>
+            <View
+              style={[
+                styles.shiftStatusIcon,
+                turnoActivo
+                  ? styles.shiftStatusIconActive
+                  : styles.shiftStatusIconInactive,
+              ]}
+            >
+              <Icon
+                name={turnoActivo ? "clock" : "coffee"}
+                size={23}
+                color={
+                  turnoActivo
+                    ? palette.success
+                    : palette.primary
+                }
+              />
+            </View>
+
+            <View style={styles.shiftInfo}>
+              <View style={styles.shiftTitleRow}>
+                <Text style={styles.shiftTitle}>
+                  {turnoActivo
+                    ? "Turno activo"
+                    : "Sin turno activo"}
+                </Text>
+
+                <View
+                  style={[
+                    styles.shiftBadge,
+                    turnoActivo
+                      ? styles.shiftBadgeActive
+                      : styles.shiftBadgeInactive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.shiftBadgeText,
+                      turnoActivo
+                        ? styles.shiftBadgeTextActive
+                        : styles.shiftBadgeTextInactive,
+                    ]}
+                  >
+                    {turnoActivo
+                      ? "TRABAJANDO"
+                      : "DISPONIBLE"}
+                  </Text>
+                </View>
+              </View>
+
+              {cargandoTurno ? (
+                <Text style={styles.shiftDescription}>
+                  Verificando estado del turno...
+                </Text>
+              ) : turnoActivo ? (
+                <Text style={styles.shiftDescription}>
+                  Inicio:{" "}
+                  {formatearFechaHora(
+                    turnoActual?.start_time
+                  )}
+                </Text>
+              ) : (
+                <Text style={styles.shiftDescription}>
+                  Puedes revisar la app. Inicia el turno
+                  cuando estés listo para atender mesas.
+                </Text>
+              )}
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.shiftActionButton,
+              turnoActivo
+                ? styles.shiftEndButton
+                : styles.shiftStartButton,
+              (cargandoTurno || procesandoTurno) &&
+                styles.shiftButtonDisabled,
+            ]}
+            onPress={
+              turnoActivo
+                ? abrirModalCerrarTurno
+                : iniciarTurno
+            }
+            disabled={
+              cargandoTurno || procesandoTurno
+            }
+          >
+            {procesandoTurno ? (
+              <ActivityIndicator
+                size="small"
+                color={palette.white}
+              />
+            ) : (
+              <>
+                <Icon
+                  name={turnoActivo ? "square" : "play"}
+                  size={17}
+                  color={palette.white}
+                />
+
+                <Text style={styles.shiftActionText}>
+                  {turnoActivo
+                    ? "Cerrar turno"
+                    : "Iniciar turno"}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.filters}>
-          {["Todas", "Libre", "Ocupada", "Reservada", "Pedido"].map((item) => (
+          {["Todas", "Libre", "Ocupada", "Reservada"].map((item) => (
             <TouchableOpacity
               key={item}
               onPress={() => setFilter(item)}
@@ -851,6 +1627,298 @@ const styles = StyleSheet.create({
   addMesaText: {
     color: palette.white,
     fontWeight: "bold",
+  },
+
+  shiftCard: {
+    borderRadius: 18,
+    padding: 15,
+    marginBottom: 15,
+    borderWidth: 1,
+    elevation: 2,
+  },
+
+  shiftCardActive: {
+    backgroundColor: palette.successBackground,
+    borderColor: palette.success,
+  },
+
+  shiftCardInactive: {
+    backgroundColor: palette.card,
+    borderColor: palette.border,
+  },
+
+  shiftCardTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+
+  shiftStatusIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+
+  shiftStatusIconActive: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: palette.success,
+  },
+
+  shiftStatusIconInactive: {
+    backgroundColor: palette.muted,
+    borderWidth: 1,
+    borderColor: palette.light,
+  },
+
+  shiftInfo: {
+    flex: 1,
+  },
+
+  shiftTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  shiftTitle: {
+    color: palette.text,
+    fontSize: 17,
+    fontWeight: "800",
+  },
+
+  shiftBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+
+  shiftBadgeActive: {
+    backgroundColor: palette.success,
+  },
+
+  shiftBadgeInactive: {
+    backgroundColor: palette.muted,
+    borderWidth: 1,
+    borderColor: palette.light,
+  },
+
+  shiftBadgeText: {
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.4,
+  },
+
+  shiftBadgeTextActive: {
+    color: palette.white,
+  },
+
+  shiftBadgeTextInactive: {
+    color: palette.primary,
+  },
+
+  shiftDescription: {
+    color: palette.textSecondary,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 6,
+  },
+
+  shiftActionButton: {
+    minHeight: 45,
+    borderRadius: 13,
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+
+  shiftStartButton: {
+    backgroundColor: palette.accent,
+  },
+
+  shiftEndButton: {
+    backgroundColor: palette.danger,
+  },
+
+  shiftButtonDisabled: {
+    opacity: 0.62,
+  },
+
+  shiftActionText: {
+    color: palette.white,
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
+  shiftModalOverlay: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: palette.overlay,
+  },
+
+  shiftModalCard: {
+    backgroundColor: palette.surface,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 28,
+  },
+
+  shiftModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 22,
+  },
+
+  shiftModalTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+
+  shiftModalIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: palette.danger,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+
+  shiftModalTitleBox: {
+    flex: 1,
+  },
+
+  shiftModalTitle: {
+    color: palette.dark,
+    fontSize: 20,
+    fontWeight: "800",
+  },
+
+  shiftModalSubtitle: {
+    color: palette.gray,
+    fontSize: 12,
+    marginTop: 3,
+  },
+
+  shiftModalClose: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: palette.muted,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 10,
+  },
+
+  shiftObservationLabel: {
+    color: palette.primary,
+    fontSize: 13,
+    fontWeight: "800",
+    marginBottom: 8,
+  },
+
+  shiftObservationInput: {
+    minHeight: 110,
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 14,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    color: palette.text,
+    backgroundColor: palette.background,
+    fontSize: 14,
+  },
+
+  shiftObservationCounter: {
+    alignSelf: "flex-end",
+    color: palette.gray,
+    fontSize: 11,
+    marginTop: 5,
+  },
+
+  shiftModalActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 18,
+  },
+
+  shiftCancelButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 13,
+    backgroundColor: palette.muted,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+
+  shiftCancelText: {
+    color: palette.textSecondary,
+    fontWeight: "800",
+  },
+
+  shiftEndConfirmButton: {
+    flex: 1.2,
+    minHeight: 48,
+    borderRadius: 13,
+    backgroundColor: palette.danger,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+
+  shiftEndConfirmText: {
+    color: palette.white,
+    fontWeight: "800",
+  },
+
+  drawerShiftBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 13,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 999,
+  },
+
+  drawerShiftBadgeActive: {
+    backgroundColor: "rgba(255,255,255,0.16)",
+  },
+
+  drawerShiftBadgeInactive: {
+    backgroundColor: "rgba(255,255,255,0.10)",
+  },
+
+  drawerShiftDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 7,
+  },
+
+  drawerShiftDotActive: {
+    backgroundColor: "#4ADE80",
+  },
+
+  drawerShiftDotInactive: {
+    backgroundColor: palette.light,
+  },
+
+  drawerShiftText: {
+    color: palette.white,
+    fontSize: 11,
+    fontWeight: "700",
   },
 
   filters: {

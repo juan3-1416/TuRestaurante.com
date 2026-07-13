@@ -453,6 +453,11 @@ setMenuVisible(false);
 navigation.navigate("Mesas");
 };
 
+const irPedidosPendientes = () => {
+setMenuVisible(false);
+navigation.navigate("PedidosPendientes");
+};
+
 const cerrarSesion = () => {
 Alert.alert(
 "Cerrar sesión",
@@ -671,6 +676,20 @@ onPress={() => setMenuVisible(false)}
           <TouchableOpacity style={styles.drawerItem} onPress={irMesas}>
             <Icon name="grid" size={21} color={palette.primary} />
             <Text style={styles.drawerItemText}>Mapa de mesas</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.drawerItem}
+            onPress={irPedidosPendientes}
+          >
+            <Icon
+              name="clipboard"
+              size={21}
+              color={palette.primary}
+            />
+            <Text style={styles.drawerItemText}>
+              Pedidos pendientes
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
