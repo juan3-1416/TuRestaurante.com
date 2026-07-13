@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -15,6 +15,51 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 
 const API_URL = "http://192.168.0.10:8000/api/tables/";
+const USERS_URL = "http://192.168.0.10:8000/api/users/";
+
+const palette = {
+  light: colors.restaurantLight ?? "#78B9B5",
+  accent:
+    colors.restaurantAccent ??
+    colors.accent ??
+    "#0F828C",
+  primary:
+    colors.restaurantPrimary ??
+    colors.primary ??
+    "#065084",
+  dark:
+    colors.restaurantDark ??
+    colors.dark ??
+    "#320A6B",
+
+  background: colors.background ?? "#F8FAFC",
+  surface: colors.surface ?? colors.white ?? "#FFFFFF",
+  card: colors.card ?? colors.white ?? "#FFFFFF",
+  muted: colors.muted ?? "#E8F3F2",
+
+  text: colors.text ?? "#0F172A",
+  textSecondary: colors.textSecondary ?? "#475569",
+  gray: colors.gray ?? "#64748B",
+  placeholder: colors.placeholder ?? "#94A3B8",
+  border: colors.border ?? "#DCE7E7",
+
+  success: colors.success ?? "#15803D",
+  successBackground:
+    colors.successBackground ?? "#DCFCE7",
+  warning: colors.warning ?? "#B45309",
+  warningBackground:
+    colors.warningBackground ?? "#FEF3C7",
+  danger: colors.danger ?? "#DC2626",
+  dangerBackground:
+    colors.dangerBackground ?? "#FEE2E2",
+  info: colors.info ?? "#065084",
+  infoBackground:
+    colors.infoBackground ?? "#E0F2FE",
+
+  white: colors.white ?? "#FFFFFF",
+  overlay:
+    colors.overlay ?? "rgba(15, 23, 42, 0.45)",
+};
 
 export default function MesasScreen({ navigation }) {
   const [filter, setFilter] = useState("Todas");
@@ -55,17 +100,180 @@ export default function MesasScreen({ navigation }) {
     });
   };
 
-  const cargarPerfil = async () => {
-    try {
-      const nombreGuardado = await AsyncStorage.getItem("userName");
-      const correoGuardado = await AsyncStorage.getItem("userEmail");
-
-      setUserName(nombreGuardado || "Administrador");
-      setUserEmail(correoGuardado || "Sesión activa");
-    } catch (error) {
-      console.log("Error cargando perfil:", error);
+const obtenerUserIdDesdeToken = (token) => {
+  try {
+    if (!token) {
+      return "";
     }
-  };
+
+    const partes = token.split(".");
+
+    if (partes.length < 2) {
+      return "";
+    }
+
+    let base64 = partes[1]
+      .replace(/-/g, "+")
+      .replace(/_/g, "/");
+
+    while (base64.length % 4) {
+      base64 += "=";
+    }
+
+    if (!global.atob) {
+      return "";
+    }
+
+    const payload = JSON.parse(global.atob(base64));
+
+    return payload?.user_id
+      ? String(payload.user_id)
+      : "";
+  } catch (error) {
+    console.log("Error leyendo user_id del token:", error);
+    return "";
+  }
+};
+
+const normalizarListaUsuarios = (data) => {
+  if (Array.isArray(data)) {
+    return data;
+  }
+
+  if (Array.isArray(data?.results)) {
+    return data.results;
+  }
+
+  return [];
+};
+
+const cargarPerfil = async () => {
+  try {
+    const token = await AsyncStorage.getItem("accessToken");
+    const nombreGuardado = await AsyncStorage.getItem("userName");
+    const correoGuardado = await AsyncStorage.getItem("userEmail");
+    const loginUsername = await AsyncStorage.getItem("loginUsername");
+    const userIdGuardado = await AsyncStorage.getItem("userId");
+
+    setUserName(nombreGuardado || loginUsername || "Administrador");
+    setUserEmail(correoGuardado || "Sesión activa");
+
+    if (!token) {
+      return;
+    }
+
+    if (
+      nombreGuardado &&
+      nombreGuardado !== "admin" &&
+      nombreGuardado !== "Administrador" &&
+      correoGuardado &&
+      correoGuardado !== "Sesión activa"
+    ) {
+      return;
+    }
+
+    const userIdToken = obtenerUserIdDesdeToken(token);
+    const userIdActual = userIdGuardado || userIdToken;
+
+    if (userIdActual && !userIdGuardado) {
+      await AsyncStorage.setItem("userId", String(userIdActual));
+    }
+
+    const response = await fetch(USERS_URL, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const text = await response.text();
+
+    console.log("STATUS USUARIOS DRAWER MESAS:", response.status);
+    console.log("RESPUESTA USUARIOS DRAWER MESAS:", text);
+
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch (error) {
+      throw new Error(
+        `El servidor no devolvió JSON. Estado: ${response.status}. Respuesta: ${text}`
+      );
+    }
+
+    if (!response.ok) {
+      throw new Error(JSON.stringify(data));
+    }
+
+    const usuarios = normalizarListaUsuarios(data);
+
+    const usuarioActual = usuarios.find((usuario) => {
+      const coincidePorId =
+        userIdActual &&
+        String(usuario.id ?? "") === String(userIdActual);
+
+      const coincidePorUsername =
+        loginUsername &&
+        String(usuario.username || "").toLowerCase() ===
+          String(loginUsername).toLowerCase();
+
+      const coincidePorEmail =
+        loginUsername &&
+        String(usuario.email || "").toLowerCase() ===
+          String(loginUsername).toLowerCase();
+
+      return (
+        coincidePorId ||
+        coincidePorUsername ||
+        coincidePorEmail
+      );
+    });
+
+    if (!usuarioActual) {
+      return;
+    }
+
+    const nombreCompleto =
+      `${usuarioActual.first_name || ""} ${usuarioActual.last_name || ""}`.trim() ||
+      usuarioActual.username ||
+      nombreGuardado ||
+      loginUsername ||
+      "Usuario";
+
+    const emailUsuario =
+      usuarioActual.email ||
+      correoGuardado ||
+      "Sesión activa";
+
+    await AsyncStorage.multiSet([
+      ["userId", String(usuarioActual.id ?? userIdActual ?? "")],
+      [
+        "loginUsername",
+        usuarioActual.username || loginUsername || "",
+      ],
+      ["userName", nombreCompleto],
+      ["userEmail", emailUsuario],
+      ["userRole", usuarioActual.role || ""],
+    ]);
+
+    setUserName(nombreCompleto);
+    setUserEmail(emailUsuario);
+  } catch (error) {
+    console.log("Error cargando perfil:", error);
+
+    const nombreGuardado = await AsyncStorage.getItem("userName");
+    const correoGuardado = await AsyncStorage.getItem("userEmail");
+    const loginUsername = await AsyncStorage.getItem("loginUsername");
+
+    setUserName(
+      nombreGuardado ||
+        loginUsername ||
+        "Administrador"
+    );
+    setUserEmail(correoGuardado || "Sesión activa");
+  }
+};
 
   const cargarMesas = async () => {
     try {
@@ -119,16 +327,12 @@ export default function MesasScreen({ navigation }) {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
+useFocusEffect(
+  useCallback(() => {
     cargarPerfil();
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      cargarMesas();
-    }, [])
-  );
+    cargarMesas();
+  }, [])
+);
 
   const irHistorial = () => {
     setMenuVisible(false);
@@ -149,12 +353,15 @@ export default function MesasScreen({ navigation }) {
           style: "destructive",
           onPress: async () => {
             try {
-              await AsyncStorage.multiRemove([
-                "accessToken",
-                "refreshToken",
-                "userName",
-                "userEmail",
-              ]);
+await AsyncStorage.multiRemove([
+  "accessToken",
+  "refreshToken",
+  "userId",
+  "userName",
+  "userEmail",
+  "userRole",
+  "loginUsername",
+]);
 
               setMenuVisible(false);
 
@@ -325,15 +532,30 @@ export default function MesasScreen({ navigation }) {
   const getStyles = (status) => {
     switch (status) {
       case "Libre":
-        return { color: "#22C55E", icon: "check-circle" };
+        return {
+          color: palette.success,
+          icon: "check-circle",
+        };
       case "Ocupada":
-        return { color: "#EF4444", icon: "dollar-sign" };
+        return {
+          color: palette.danger,
+          icon: "users",
+        };
       case "Reservada":
-        return { color: "#EAB308", icon: "clock" };
+        return {
+          color: palette.warning,
+          icon: "clock",
+        };
       case "Pedido":
-        return { color: "#2563EB", icon: "shopping-cart" };
+        return {
+          color: palette.accent,
+          icon: "shopping-cart",
+        };
       default:
-        return { color: "#6B7280", icon: "circle" };
+        return {
+          color: palette.gray,
+          icon: "circle",
+        };
     }
   };
 
@@ -397,7 +619,7 @@ export default function MesasScreen({ navigation }) {
               <Text style={styles.orderText}>Pedido activo</Text>
             )}
 
-            <Icon name="play" size={16} color={colors.primary} />
+            <Icon name="play" size={16} color={palette.primary} />
           </View>
         </TouchableOpacity>
 
@@ -453,7 +675,7 @@ export default function MesasScreen({ navigation }) {
                 style={styles.closeBtn}
                 onPress={() => setMenuVisible(false)}
               >
-                <Icon name="x" size={24} color="#FFFFFF" />
+                <Icon name="x" size={24} color={palette.white} />
               </TouchableOpacity>
 
               <View style={styles.avatar}>
@@ -468,10 +690,10 @@ export default function MesasScreen({ navigation }) {
 
             <View style={styles.drawerMenu}>
               <TouchableOpacity
-                style={styles.drawerItem}
+                style={[styles.drawerItem, styles.drawerItemActive]}
                 onPress={() => setMenuVisible(false)}
               >
-                <Icon name="grid" size={21} color="#4C1D95" />
+                <Icon name="grid" size={21} color={palette.primary} />
                 <Text style={styles.drawerItemText}>Mapa de mesas</Text>
               </TouchableOpacity>
 
@@ -479,7 +701,7 @@ export default function MesasScreen({ navigation }) {
                 style={styles.drawerItem}
                 onPress={irHistorial}
               >
-                <Icon name="clock" size={21} color="#4C1D95" />
+                <Icon name="clock" size={21} color={palette.primary} />
                 <Text style={styles.drawerItemText}>
                   Historial de ventas
                 </Text>
@@ -491,7 +713,7 @@ export default function MesasScreen({ navigation }) {
                 style={styles.logoutBtn}
                 onPress={cerrarSesion}
               >
-                <Icon name="log-out" size={20} color="#DC2626" />
+                <Icon name="log-out" size={20} color={palette.danger} />
                 <Text style={styles.logoutText}>Cerrar sesión</Text>
               </TouchableOpacity>
             </View>
@@ -505,7 +727,7 @@ export default function MesasScreen({ navigation }) {
             style={styles.menuBtn}
             onPress={() => setMenuVisible(true)}
           >
-            <Icon name="menu" size={26} color="#FFFFFF" />
+            <Icon name="menu" size={26} color={palette.white} />
           </TouchableOpacity>
 
           <Text style={styles.pageTitle}>Mesas</Text>
@@ -515,7 +737,7 @@ export default function MesasScreen({ navigation }) {
             onPress={cargarMesas}
             disabled={loading}
           >
-            <Icon name="refresh-cw" size={18} color="#4C1D95" />
+            <Icon name="refresh-cw" size={18} color={palette.primary} />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.addMesaBtn} onPress={crearMesa}>
@@ -536,7 +758,7 @@ export default function MesasScreen({ navigation }) {
               <Text
                 style={[
                   styles.filterText,
-                  filter === item && { color: "#FFFFFF" },
+                  filter === item && { color: palette.white },
                 ]}
               >
                 {item}
@@ -547,7 +769,7 @@ export default function MesasScreen({ navigation }) {
 
         {loading ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color="#4C1D95" />
+            <ActivityIndicator size="large" color={palette.primary} />
             <Text style={styles.loadingText}>Cargando mesas...</Text>
           </View>
         ) : (
@@ -574,7 +796,7 @@ export default function MesasScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F1F5F9",
+    backgroundColor: palette.background,
     padding: 15,
   },
 
@@ -583,15 +805,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
     gap: 8,
+    backgroundColor: palette.primary,
+    borderRadius: 18,
+    padding: 10,
+    elevation: 3,
   },
 
   menuBtn: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    backgroundColor: "#4C1D95",
+    backgroundColor: palette.dark,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: palette.light,
   },
 
   pageTitle: {
@@ -599,27 +827,29 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     fontSize: 22,
     fontWeight: "bold",
-    color: "#4C1D95",
+    color: palette.white,
   },
 
   refreshBtn: {
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: "#EDE9FE",
+    backgroundColor: palette.light,
     alignItems: "center",
     justifyContent: "center",
   },
 
   addMesaBtn: {
-    backgroundColor: "#4C1D95",
+    backgroundColor: palette.accent,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.light,
   },
 
   addMesaText: {
-    color: "#FFFFFF",
+    color: palette.white,
     fontWeight: "bold",
   },
 
@@ -631,19 +861,23 @@ const styles = StyleSheet.create({
   },
 
   filter: {
-    padding: 10,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: "#E5E7EB",
+    backgroundColor: palette.muted,
+    borderWidth: 1,
+    borderColor: palette.border,
   },
 
   activeFilter: {
-    backgroundColor: "#4C1D95",
+    backgroundColor: palette.primary,
+    borderColor: palette.primary,
   },
 
   filterText: {
     fontSize: 12,
     fontWeight: "bold",
-    color: "#1F2937",
+    color: palette.text,
   },
 
   loadingBox: {
@@ -654,7 +888,7 @@ const styles = StyleSheet.create({
 
   loadingText: {
     marginTop: 10,
-    color: "#4B5563",
+    color: palette.textSecondary,
     fontWeight: "bold",
   },
 
@@ -664,26 +898,27 @@ const styles = StyleSheet.create({
   },
 
   emptyListText: {
-    color: "#6B7280",
+    color: palette.gray,
     fontWeight: "bold",
   },
 
   card: {
     width: "48%",
     padding: 15,
-    borderRadius: 25,
-    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    backgroundColor: palette.card,
     borderWidth: 2,
     marginBottom: 15,
+    elevation: 2,
   },
 
   dot: {
     position: "absolute",
-    top: 10,
-    right: 10,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
+    top: 11,
+    right: 11,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
   },
 
   row: {
@@ -700,35 +935,37 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#111827",
+    color: palette.text,
   },
 
   sub: {
     fontSize: 11,
-    color: "#6B7280",
+    color: palette.gray,
   },
 
   clientBox: {
-    backgroundColor: "#F3F4F6",
+    backgroundColor: palette.muted,
     padding: 10,
     borderRadius: 15,
     marginTop: 10,
+    borderWidth: 1,
+    borderColor: palette.border,
   },
 
   clientLabel: {
     fontSize: 10,
-    color: "#9CA3AF",
+    color: palette.gray,
   },
 
   client: {
     fontWeight: "bold",
-    color: "#111827",
+    color: palette.text,
   },
 
   empty: {
     marginTop: 10,
     fontStyle: "italic",
-    color: "#9CA3AF",
+    color: palette.placeholder,
   },
 
   footer: {
@@ -740,62 +977,65 @@ const styles = StyleSheet.create({
 
   total: {
     fontWeight: "bold",
-    color: "#2563EB",
+    color: palette.accent,
   },
 
   time: {
-    color: "#CA8A04",
+    color: palette.warning,
+    fontWeight: "600",
   },
 
   available: {
-    color: "#22C55E",
+    color: palette.success,
     fontWeight: "bold",
   },
 
   orderText: {
-    color: "#2563EB",
+    color: palette.accent,
     fontWeight: "bold",
   },
 
   editBtn: {
     marginTop: 10,
-    backgroundColor: "#DBEAFE",
-    paddingVertical: 7,
+    backgroundColor: palette.infoBackground,
+    paddingVertical: 8,
     borderRadius: 10,
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: palette.light,
   },
 
   editText: {
-    color: "#2563EB",
+    color: palette.primary,
     fontWeight: "bold",
     fontSize: 12,
   },
 
   deleteBtn: {
     marginTop: 10,
-    backgroundColor: "#FEE2E2",
-    paddingVertical: 7,
+    backgroundColor: palette.dangerBackground,
+    paddingVertical: 8,
     borderRadius: 10,
     alignItems: "center",
   },
 
   deleteBtnDisabled: {
-    backgroundColor: "#E5E7EB",
+    backgroundColor: palette.muted,
   },
 
   deleteText: {
-    color: "#DC2626",
+    color: palette.danger,
     fontWeight: "bold",
     fontSize: 12,
   },
 
   deleteTextDisabled: {
-    color: "#9CA3AF",
+    color: palette.placeholder,
   },
 
   modalBackground: {
     flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.45)",
+    backgroundColor: palette.overlay,
   },
 
   backdrop: {
@@ -806,16 +1046,18 @@ const styles = StyleSheet.create({
     width: "78%",
     maxWidth: 330,
     height: "100%",
-    backgroundColor: "#F8FAFC",
+    backgroundColor: palette.background,
     elevation: 12,
   },
 
   drawerHeader: {
-    backgroundColor: "#4C1D95",
+    backgroundColor: palette.dark,
     alignItems: "center",
     paddingTop: 48,
     paddingBottom: 28,
     paddingHorizontal: 18,
+    borderBottomWidth: 4,
+    borderBottomColor: palette.accent,
   },
 
   closeBtn: {
@@ -829,26 +1071,28 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.light,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 12,
+    borderWidth: 3,
+    borderColor: palette.white,
   },
 
   avatarText: {
-    color: "#4C1D95",
+    color: palette.dark,
     fontSize: 31,
     fontWeight: "bold",
   },
 
   drawerName: {
-    color: "#FFFFFF",
+    color: palette.white,
     fontSize: 19,
     fontWeight: "bold",
   },
 
   drawerEmail: {
-    color: "#DDD6FE",
+    color: palette.light,
     fontSize: 13,
     marginTop: 5,
   },
@@ -862,15 +1106,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.surface,
     paddingHorizontal: 16,
     paddingVertical: 16,
     borderRadius: 14,
     marginBottom: 10,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+
+  drawerItemActive: {
+    backgroundColor: palette.muted,
+    borderLeftWidth: 4,
+    borderLeftColor: palette.accent,
   },
 
   drawerItemText: {
-    color: "#1F2937",
+    color: palette.text,
     fontSize: 15,
     fontWeight: "bold",
   },
@@ -886,13 +1138,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    backgroundColor: "#FEE2E2",
+    backgroundColor: palette.dangerBackground,
     paddingVertical: 14,
     borderRadius: 14,
   },
 
   logoutText: {
-    color: "#DC2626",
+    color: palette.danger,
     fontWeight: "bold",
     fontSize: 15,
   },
