@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import QueryProvider from "@/lib/QueryProvider";
+import WebSocketProvider from "@/lib/WebSocketProvider";
 
 export const metadata: Metadata = {
   title: "Software Restaurante",
@@ -17,7 +18,9 @@ export default function RootLayout({
       <body>
         {/* Envolvemos la app con nuestro Provider modular */}
         <QueryProvider>
-          {children}
+          <WebSocketProvider>
+            {children}
+          </WebSocketProvider>
         </QueryProvider>
       </body>
     </html>
