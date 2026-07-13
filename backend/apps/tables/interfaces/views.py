@@ -6,6 +6,18 @@ from apps.tables.infrastructure.models import Table
 from apps.orders.infrastructure.models import Order, OrderItem
 from apps.inventory.infrastructure.models import Product
 from .serializers import TableSerializer
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+
+def broadcast_table_update(table_id):
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        "restaurant_tables",
+        {
+            "type": "broadcast_update",
+            "table_id": table_id
+        }
+    )
 
 class TableViewSet(viewsets.ModelViewSet):
     queryset = Table.objects.all()
@@ -20,6 +32,7 @@ class TableViewSet(viewsets.ModelViewSet):
         table.is_active = False
         table.status = 'Libre'
         table.save()
+        broadcast_table_update(table.id)
         return Response(status=204)
 
     def create(self, request, *args, **kwargs):
@@ -39,10 +52,14 @@ class TableViewSet(viewsets.ModelViewSet):
                 if capacity:
                     existing_table.capacity = capacity
                 existing_table.save()
+                broadcast_table_update(existing_table.id)
                 serializer = self.get_serializer(existing_table)
                 return Response(serializer.data, status=200)
                 
-        return super().create(request, *args, **kwargs)
+        response = super().create(request, *args, **kwargs)
+        if response.status_code == 201:
+            broadcast_table_update(response.data.get('id'))
+        return response
 
     @action(detail=True, methods=['patch'])
     def update_status(self, request, pk=None):
@@ -64,6 +81,7 @@ class TableViewSet(viewsets.ModelViewSet):
             order = table.orders.filter(status='Pendiente').first()
             if not order:
                 order = Order.objects.create(table=table)
+                order.waiter = request.user
             
             if customer_name is not None:
                 order.customer_name = customer_name
@@ -79,19 +97,22 @@ class TableViewSet(viewsets.ModelViewSet):
                 for prod in orders_data:
                     p_id = prod.get('id')
                     price = prod.get('price', 0)
-                    if p_id not in product_counts:
-                        product_counts[p_id] = {'qty': 0, 'price': price}
-                    product_counts[p_id]['qty'] += 1
+                    is_takeaway = prod.get('isTakeaway', False)
+                    key = f"{p_id}_{is_takeaway}"
+                    if key not in product_counts:
+                        product_counts[key] = {'p_id': p_id, 'qty': 0, 'price': price, 'is_takeaway': is_takeaway}
+                    product_counts[key]['qty'] += 1
                 
                 new_total = 0
-                for p_id, info in product_counts.items():
-                    product = Product.objects.filter(id=p_id).first()
+                for key, info in product_counts.items():
+                    product = Product.objects.filter(id=info['p_id']).first()
                     if product:
                         OrderItem.objects.create(
                             order=order,
                             product=product,
                             quantity=info['qty'],
-                            price=info['price']
+                            price=info['price'],
+                            is_takeaway=info['is_takeaway']
                         )
                         new_total += float(info['price']) * info['qty']
                 
@@ -102,10 +123,54 @@ class TableViewSet(viewsets.ModelViewSet):
         elif new_status == 'Libre':
             order = table.orders.filter(status='Pendiente').first()
             if order:
-                order.status = 'Pagada'
+                if order.total == 0:
+                    order.status = 'Cancelada'
+                else:
+                    order.status = 'Pagada'
                 order.save()
 
         if hasattr(table, '_active_order'):
             delattr(table, '_active_order')
             
+        broadcast_table_update(table.id)
         return Response({'status': 'Estado actualizado', 'table': TableSerializer(table).data})
+
+    @action(detail=True, methods=['patch'])
+    def report_walkout(self, request, pk=None):
+        table = self.get_object()
+        note = request.data.get('note', 'Fuga reportada')
+        
+        order = table.orders.filter(status='Pendiente').first()
+        if not order:
+            return Response({'error': 'No hay orden pendiente en esta mesa.'}, status=400)
+            
+        table.status = 'Observada'
+        table.save()
+        
+        order.status = 'Observada'
+        order.observation_note = f"[{request.user.username}] {note}"
+        order.save()
+        
+        broadcast_table_update(table.id)
+        return Response({'status': 'Fuga reportada', 'table': TableSerializer(table).data})
+
+    @action(detail=True, methods=['patch'])
+    def resolve_walkout(self, request, pk=None):
+        table = self.get_object()
+        
+        if table.status != 'Observada':
+            return Response({'error': 'La mesa no esta observada.'}, status=400)
+            
+        order = table.orders.filter(status='Observada').first()
+        
+        table.status = 'Libre'
+        table.save()
+        
+        if order:
+            order.status = 'Cancelada'
+            order.observation_note = (order.observation_note or '') + f" | Resuelto por {request.user.username}"
+            order.save()
+            
+        broadcast_table_update(table.id)
+        return Response({'status': 'Fuga resuelta', 'table': TableSerializer(table).data})
+
