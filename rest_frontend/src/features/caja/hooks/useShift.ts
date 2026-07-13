@@ -28,9 +28,6 @@ export function useShift() {
 
   const openShift = useMutation({
     mutationFn: async ({ initial_balance }: { initial_balance: number }) => {
-      // Intentamos iniciar el turno de empleado también
-      apiClient.post("/users/shifts/start/").catch(() => {});
-      
       const response = await apiClient.post("/cashier/shift/open_shift/", {
         initial_balance,
       });
@@ -43,9 +40,6 @@ export function useShift() {
 
   const closeShift = useMutation({
     mutationFn: async () => {
-      // Finalizamos el turno de empleado también
-      apiClient.post("/users/shifts/end/", { observations: "Cierre de caja automático" }).catch(() => {});
-
       const response = await apiClient.post("/cashier/shift/close_shift/");
       return response.data;
     },

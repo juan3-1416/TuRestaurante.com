@@ -9,7 +9,7 @@ import { LoadingButton } from "@/shared/components/LoadingButton"
 import { useAuthStore } from "@/store/authStore"
 
 export function TurnosDashboard() {
-  const { shifts, isLoading, refetch, activeShift, startShift, endShift } = useEmployeeShift()
+  const { shifts, isLoading, refetch } = useEmployeeShift()
   const { user } = useAuthStore()
   
   const [searchEmployee, setSearchEmployee] = useState("")
@@ -38,20 +38,6 @@ export function TurnosDashboard() {
   }, [shifts, searchEmployee, filterDate, filterRole])
 
   const isAdmin = user?.role === "ADMIN"
-  const isWaiter = user?.role === "WAITER"
-
-  // Botón manual para mesero
-  const handleToggleWaiterShift = async () => {
-    if (activeShift) {
-      // Pedimos confirmación y observación al mesero para finalizar
-      const obs = window.prompt("¿Observaciones de tu turno (opcional)?", "Sin observaciones")
-      if (obs !== null) {
-        await endShift.mutateAsync({ observations: obs })
-      }
-    } else {
-      await startShift.mutateAsync()
-    }
-  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700 max-w-6xl mx-auto">
@@ -70,21 +56,6 @@ export function TurnosDashboard() {
           </p>
         </div>
         <div className="flex gap-3">
-          {isWaiter && (
-            <LoadingButton
-              onClick={handleToggleWaiterShift}
-              isLoading={isLoading}
-              className={`px-6 py-2.5 rounded-xl font-bold shadow-lg transition-all flex items-center gap-2 ${
-                activeShift 
-                  ? "bg-red-500 hover:bg-red-600 shadow-red-500/30 text-white" 
-                  : "bg-green-500 hover:bg-green-600 shadow-green-500/30 text-white"
-              }`}
-            >
-              <Clock size={16} />
-              {activeShift ? "Finalizar Mi Turno" : "Iniciar Turno"}
-            </LoadingButton>
-          )}
-
           <LoadingButton
             onClick={() => refetch()}
             isLoading={isLoading}

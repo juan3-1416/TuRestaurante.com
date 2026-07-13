@@ -39,6 +39,8 @@ export function TurnosHistoryTable({ pastShifts, onRowClick }: TurnosHistoryTabl
                 <th className="text-left text-[11px] font-black text-gray-400 uppercase tracking-widest pb-3 pr-4">Fecha</th>
                 <th className="text-left text-[11px] font-black text-gray-400 uppercase tracking-widest pb-3 pr-4">Entrada</th>
                 <th className="text-left text-[11px] font-black text-gray-400 uppercase tracking-widest pb-3 pr-4">Salida</th>
+                <th className="text-center text-[11px] font-black text-gray-400 uppercase tracking-widest pb-3 pr-4">Tickets</th>
+                <th className="text-center text-[11px] font-black text-gray-400 uppercase tracking-widest pb-3 pr-4">Mesas</th>
                 <th className="text-left text-[11px] font-black text-gray-400 uppercase tracking-widest pb-3 pr-4">Ingresos</th>
                 <th className="text-left text-[11px] font-black text-gray-400 uppercase tracking-widest pb-3">Observaciones</th>
               </tr>
@@ -75,6 +77,12 @@ export function TurnosHistoryTable({ pastShifts, onRowClick }: TurnosHistoryTabl
                   </td>
                   <td className="py-4 pr-4">
                     <span className="font-mono font-bold text-sm text-restaurante-oscuro">{formatTime(shift.end_time)}</span>
+                  </td>
+                  <td className="py-4 pr-4 text-center">
+                    <span className="font-bold text-sm text-gray-600">{shift.tickets_generated ?? shift.orders_charged ?? 0}</span>
+                  </td>
+                  <td className="py-4 pr-4 text-center">
+                    <span className="font-bold text-sm text-gray-600">{shift.tables_served ?? 0}</span>
                   </td>
                   <td className="py-4 pr-4">
                     <div className="flex items-center gap-1.5">

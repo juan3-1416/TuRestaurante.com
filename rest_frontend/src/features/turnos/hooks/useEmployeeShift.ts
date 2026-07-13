@@ -22,6 +22,7 @@ export interface EmployeeShift {
   scheduled_end?: string;
   shift_title?: string;
   orders_charged?: number;
+  tickets_generated?: number;
   walkout_observations?: string[];
 }
 

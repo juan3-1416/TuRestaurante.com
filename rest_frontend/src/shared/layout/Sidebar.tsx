@@ -6,6 +6,8 @@ import {
   UtensilsCrossed, LayoutGrid, BarChart3, LogOut, ChevronLeft, Wallet, Users, UserCircle, LucideIcon, Clock
 } from "lucide-react"
 import { useAuthStore, Role } from "@/store/authStore"
+import { useEmployeeShift } from "@/features/turnos/hooks/useEmployeeShift"
+import { EndShiftModal } from "@/features/turnos/components/EndShiftModal"
 
 export function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false)
@@ -13,10 +15,16 @@ export function Sidebar() {
   const router = useRouter()
   const logout = useAuthStore((state) => state.logout)
   const user = useAuthStore((state) => state.user)
+  const { activeShift, endShift } = useEmployeeShift()
+  const [isEndShiftModalOpen, setIsEndShiftModalOpen] = useState(false)
 
   const handleLogout = () => {
     logout()
     router.push("/login")
+  }
+  
+  const handleEndShiftConfirm = async (observations: string) => {
+    await endShift.mutateAsync({ observations })
   }
   
   const menuItems: { name: string; icon: LucideIcon; path: string; disabled?: boolean; roles: Role[] }[] = [
@@ -107,8 +115,20 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer del Sidebar (Cerrar Sesión) */}
-      <div className="p-4 border-t border-white/10">
+      {/* Footer del Sidebar (Acciones) */}
+      <div className="p-4 border-t border-white/10 space-y-2">
+        {/* Botón de Finalizar Turno (Solo para roles con turno activo y que no sean ADMIN) */}
+        {activeShift && user?.role !== "ADMIN" && (
+          <button 
+            onClick={() => setIsEndShiftModalOpen(true)}
+            className="flex items-center w-full p-3 rounded-xl text-orange-200 hover:bg-orange-500/20 hover:backdrop-blur-sm transition-all duration-200 group border border-transparent hover:border-orange-500/30"
+          >
+            <Clock size={22} className={`${isCollapsed ? "mx-auto" : "mr-3"} group-hover:scale-110 transition-transform duration-200`} />
+            {!isCollapsed && <span className="font-bold">Finalizar Turno</span>}
+          </button>
+        )}
+        
+        {/* Cerrar Sesión */}
         <button 
           onClick={handleLogout}
           className="flex items-center w-full p-3 rounded-xl text-red-200 hover:bg-red-500/20 hover:backdrop-blur-sm transition-all duration-200 group border border-transparent hover:border-red-500/30"
@@ -117,6 +137,13 @@ export function Sidebar() {
           {!isCollapsed && <span className="font-bold">Cerrar Sesión</span>}
         </button>
       </div>
+
+      <EndShiftModal 
+        isOpen={isEndShiftModalOpen}
+        onClose={() => setIsEndShiftModalOpen(false)}
+        onConfirm={handleEndShiftConfirm}
+        isLoading={endShift.isPending}
+      />
     </aside>
   )
 }
