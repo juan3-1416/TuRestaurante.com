@@ -4,8 +4,8 @@ import QueryProvider from "@/lib/QueryProvider";
 import WebSocketProvider from "@/lib/WebSocketProvider";
 
 export const metadata: Metadata = {
-  title: "Software Restaurante",
-  description: "Software para el manejo de un restaurante",
+  title: "NextOrder",
+  description: "NextOrder - Software para Restaurantes",
 };
 
 export default function RootLayout({

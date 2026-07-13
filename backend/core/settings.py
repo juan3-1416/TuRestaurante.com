@@ -111,7 +111,7 @@ CHANNEL_LAYERS = {
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'turestaurante_db'),
+        'NAME': os.environ.get('DB_NAME', 'nextorder_db'),
         'USER': os.environ.get('DB_USER', 'admin'),
         'PASSWORD': os.environ.get('DB_PASSWORD', 'adminpassword'),
         'HOST': os.environ.get('DB_HOST', 'localhost'),
@@ -181,8 +181,8 @@ SIMPLE_JWT = {
 
 # Configuración de la Documentación Swagger
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'TuRestaurante API',
-    'DESCRIPTION': 'Documentación interactiva de la API para el restaurante',
+    'TITLE': 'NextOrder API',
+    'DESCRIPTION': 'Documentación de la API de NextOrder',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
