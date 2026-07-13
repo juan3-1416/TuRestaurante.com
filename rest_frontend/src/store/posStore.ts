@@ -10,7 +10,8 @@ export interface OrderItem {
   id?: number | string; // Backend expects 'id' as product id
   name: string;
   price: number;
-  isTakeaway?: boolean; // Para llevar
+  isTakeaway?: boolean;  // Para llevar
+  orderNote?: string;    // Descripción del pedido (viene del backend por cada ítem)
 }
 
 export interface Table {
@@ -22,9 +23,10 @@ export interface Table {
   activeTime?: string
   customerName?: string
   orders?: OrderItem[]
-  activeOrderId?: number | string | null // ID real de la orden en el backend
-  observationNote?: string | null        // Nota de fuga (walkout)
-  waiter?: string | null                 // Nombre del mesero que atendió
+  activeOrderId?: number | string | null  // ID real de la primera orden en el backend
+  activeOrderIds?: (number | string)[]    // IDs de TODAS las órdenes activas (multi-ticket)
+  observationNote?: string | null         // Nota de fuga (walkout)
+  waiter?: string | null                  // Nombre del mesero que atendió
 }
 
 export interface Transaction {

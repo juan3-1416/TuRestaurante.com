@@ -14,7 +14,7 @@ interface TableDetailProps {
 }
 
 export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
-  const { updateTableStatus, reportWalkout } = useTables()
+  const { updateTableStatus, addNewOrder, reportWalkout } = useTables()
   const [isLoading, setIsLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<"detail" | "products">("detail")
@@ -22,9 +22,12 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
   const [prevTableId, setPrevTableId] = useState<string | null>(null)
   const [selectedProducts, setSelectedProducts] = useState<Product[]>([])
   
-  // NUEVO ESTADO PARA CONTROLAR SI ESTAMOS EDITANDO O AÑADIENDO
+  // ESTADO PARA CONTROLAR SI ESTAMOS EDITANDO O AÑADIENDO
   const [orderMode, setOrderMode] = useState<"edit" | "append">("edit")
   const [editingTicketId, setEditingTicketId] = useState<string | null>(null)
+
+  // NOTA / DESCRIPCIÓN del pedido actual (se limpia al enviar o cambiar de mesa)
+  const [orderNote, setOrderNote] = useState<string>("")
 
   // Solo reiniciamos la vista a "detail" cuando cambiamos de mesa.
   // Ya NO precargamos selectedProducts aquí para no interferir con la lógica de solo lectura.
@@ -32,6 +35,7 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
     setPrevTableId(table.id)
     setViewMode("detail")
     setEditingTicketId(null)
+    setOrderNote("")
   }
 
   if (!table) return null
@@ -100,50 +104,74 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
       setViewMode("products")
     } else if (actionName === "Enviar a Cocina" || actionName === "Solo Modificar") {
       
-      let finalOrders: OrderItem[] = [];
-
-      // Mapeamos los productos NUEVOS del carrito
-      // Cada nuevo pedido tiene su propio UUID como orderId (pedido independiente)
+      // Mapeamos los productos del carrito
       const newMappedOrders = selectedProducts.map((p): OrderItem => ({
         cartId: p.cartId || crypto.randomUUID(),
         orderId: editingTicketId || crypto.randomUUID(),
         productId: p.id,
-        id: p.id, // El backend usa prod.get('id') para identificar el producto
+        id: p.id,
         name: p.name,
         price: p.price,
         isTakeaway: p.isTakeaway ?? false
       }));
 
       if (orderMode === "append") {
-        // Modo Agregar: los items existentes se mantienen con su orderId original.
-        // Los del backend no tienen orderId (quedan como "Orden 1").
-        // Los nuevos tienen su propio UUID -> se muestran como un pedido separado.
-        const existingWithId = (table.orders || []).map((o): OrderItem => ({
-          ...o,
-          productId: o.id || o.productId, // Asegurar que el backend recibe el id correcto
-          id: o.id || o.productId,
-        }));
-        finalOrders = [...existingWithId, ...newMappedOrders];
+        // Modo Agregar: crear una Order NUEVA en el backend con solo los ítems nuevos.
+        // El backend asignará un ID numérico real a esta orden.
+        // Después del addNewOrder, el hook invalida las queries y el backend devuelve
+        // todos los items con sus orderId numéricos correctos.
+        await addNewOrder.mutateAsync({
+          id: table.id,
+          status: "Ocupada",
+          customerName: table.customerName || "Cliente Casual",
+          orders: newMappedOrders,
+          activeTime: table.activeTime || "0 min",
+          note: orderNote || undefined,  // Descripción del pedido → se guarda en BD
+        })
       } else {
-        // Modo Editar: reemplazamos solo los items del ticket editado
-        const otherOrders = (table.orders || [])
-          .filter(o => (o.orderId || "Orden 1") !== (editingTicketId || "Orden 1"))
-          .map((o): OrderItem => ({
-            ...o,
-            productId: o.id || o.productId,
-            id: o.id || o.productId,
-          }));
-        finalOrders = [...otherOrders, ...newMappedOrders];
+        // Modo Editar: reemplazamos los ítems del ticket editado.
+        // Construimos los orders de los otros tickets para mandarlos como contexto
+        // (el backend solo editará la orden con edit_order_id).
+        const editOrderIdNum = editingTicketId && !isNaN(Number(editingTicketId))
+          ? Number(editingTicketId)
+          : undefined;
+
+        if (editOrderIdNum !== undefined) {
+          // El ticket es del backend (ID numérico) → editar esa orden específica
+          await updateTableStatus.mutateAsync({
+            id: table.id,
+            status: "Ocupada",
+            customerName: table.customerName || "Cliente Casual",
+            orders: newMappedOrders,
+            activeTime: table.activeTime || "0 min",
+            orderId: editOrderIdNum,
+            note: orderNote || undefined,  // Descripción del pedido → se guarda en BD
+          })
+          // Actualizar el caché local: reemplazar los ítems de ESE ticket
+          // Los demás tickets se mantienen intactos
+        } else {
+          // El ticket tiene UUID (sesion local) → comportamiento clásico con todos los ítems
+          const otherOrders = (table.orders || [])
+            .filter(o => (o.orderId || "Orden 1") !== (editingTicketId || "Orden 1"))
+            .map((o): OrderItem => ({
+              ...o,
+              productId: o.id || o.productId,
+              id: o.id || o.productId,
+            }));
+          const finalOrders = [...otherOrders, ...newMappedOrders];
+          await updateTableStatus.mutateAsync({
+            id: table.id,
+            status: "Ocupada",
+            customerName: table.customerName || "Cliente Casual",
+            orders: finalOrders,
+            activeTime: table.activeTime || "0 min",
+            note: orderNote || undefined,  // Descripción del pedido → se guarda en BD
+          })
+        }
       }
-      
-      await updateTableStatus.mutateAsync({
-        id: table.id,
-        status: "Ocupada",
-        customerName: table.customerName || "Cliente Casual",
-        orders: finalOrders,
-        activeTime: table.activeTime || "0 min"
-      })
-      
+
+      // Limpiar la nota del pedido al enviarlo
+      setOrderNote("")
       setViewMode("detail")
     }
 
@@ -191,6 +219,8 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
             handleAction={handleAction}
             isLoading={isLoading}
             actionLoading={actionLoading}
+            orderNote={orderNote}
+            setOrderNote={setOrderNote}
           />
         )}
       </DialogContent>
