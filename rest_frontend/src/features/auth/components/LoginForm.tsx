@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 
 import { LoadingButton } from "@/shared/components/LoadingButton"
 import { api } from "@/lib/api";
+import React from "react";
 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form" 
 import { Input } from "@/components/ui/input" 
@@ -39,7 +40,7 @@ export function LoginForm(){
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
-            console.log("Conectando al servidor...", values);
+            console.log("Conectando al servidor...");
             // Petición POST oficial a Django (`/api/users/token/`)
             const response = await api.post('/users/token/', values);
             
@@ -49,16 +50,23 @@ export function LoginForm(){
             login(token, refreshToken);
             await useAuthStore.getState().fetchUser();
             
-            const role = useAuthStore.getState().user?.role;
+            const user = useAuthStore.getState().user;
+            if (!user) {
+                alert("¡El perfil del usuario no pudo ser cargado! El servidor no devolvió el usuario.");
+                return;
+            }
+
+            const role = user.role;
             if (role === 'CASHIER') {
-                router.push("/caja");
+                window.location.href = "/caja";
             } else if (role === 'WAITER') {
-                router.push("/pos/mesas");
+                window.location.href = "/pos/mesas";
             } else {
-                router.push("/dashboard");
+                window.location.href = "/dashboard";
             }
             
-        } catch (error) {
+        } catch (error: any) {
+            alert("Error general: " + (error?.message || "Desconocido"));
             console.error("Error al iniciar sesión", error)
         }
     }
@@ -95,7 +103,9 @@ export function LoginForm(){
 
             {/* Formulario */}
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+                <form method="POST" onSubmit={form.handleSubmit(onSubmit)} className="space-y-5" onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.preventDefault(); // Prevent early native submit on enter
+                }}>
                     <FormField
                         control={form.control}
                         name="username"
@@ -160,6 +170,7 @@ export function LoginForm(){
                     {/* Botón de login */}
                     <LoadingButton 
                         type="submit" 
+                        disabled={isSubmitting}
                         isLoading={isSubmitting}
                         loadingText="Ingresando..."
                         className="w-full h-12 bg-linear-to-r from-restaurante-primario to-restaurante-acento hover:from-restaurante-oscuro hover:to-restaurante-primario text-white text-base font-semibold rounded-xl transition-all duration-300 shadow-lg shadow-restaurante-primario/25 hover:shadow-restaurante-oscuro/30 hover:scale-[1.01] active:scale-[0.99]"
