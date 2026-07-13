@@ -639,108 +639,68 @@ useFocusEffect(
 
             try {
               const headers = await getAuthHeaders();
+              const updateUrl = `${TABLES_URL}${mesa.id}/update_status/`;
 
               let orden = await buscarOrdenPendienteDeMesa();
 
-              if (!orden) {
-                const sesion = await obtenerSesionActual();
-                const userIdNumerico = Number(sesion.userId);
+              // Construir el array de orders expandiendo cantidades
+              const payloadOrders = [];
 
-                const orderData = {
-                  table: mesa.id,
-                  customer_name: mesa.customerName || "",
-
-                  // Se envían los nombres más comunes para que el
-                  // serializer use el campo que exista en el backend.
-                  created_by: userIdNumerico,
-                  user: userIdNumerico,
-                  waiter: userIdNumerico,
-                };
-
-                console.log("========== CREAR ORDEN ==========");
-                console.log("URL CREAR ORDEN:", ORDERS_URL);
-                console.log(
-                  "USUARIO QUE CREA LA ORDEN:",
-                  sesion.userId
-                );
-                console.log("PAYLOAD ORDEN:", orderData);
-
-                const orderResponse = await fetch(ORDERS_URL, {
-                  method: "POST",
-                  headers,
-                  body: JSON.stringify(orderData),
-                });
-
-                const orderDataResponse = await parseJsonResponse(
-                  orderResponse,
-                  "CREAR ORDEN"
-                );
-
-                if (!orderResponse.ok) {
-                  throw new Error(
-                    JSON.stringify(orderDataResponse)
-                  );
+              // Agregar items de pedidoActual (expandir por cantidad)
+              pedidoActual.forEach(item => {
+                for (let i = 0; i < item.cantidad; i++) {
+                  payloadOrders.push({
+                    id: item.producto.id,
+                    price: item.precio,
+                    isTakeaway: false
+                  });
                 }
+              });
 
-                orden = orderDataResponse;
-
-                await guardarPropietarioLocal(
-                  orden.id,
-                  sesion.userId
-                );
-
-                const usuarioDevuelto =
-                  obtenerIdUsuarioOrden(orden);
-
-                console.log("ORDEN CREADA COMPLETA:", orden);
-                console.log(
-                  "USUARIO DEVUELTO POR BACKEND:",
-                  usuarioDevuelto
-                );
-
-                if (!usuarioDevuelto) {
-                  console.log(
-                    "AVISO: el backend no devolvió propietario; " +
-                      "se usará el respaldo local orderOwnersById."
-                  );
+              // Agregar items de carrito (expandir por cantidad)
+              carrito.forEach(item => {
+                for (let i = 0; i < item.cantidad; i++) {
+                  payloadOrders.push({
+                    id: item.producto.id,
+                    price: item.producto.precio,
+                    isTakeaway: false
+                  });
                 }
+              });
+
+              const payload = {
+                status: "Ocupada",
+                customerName: mesa.customerName || "Cliente App",
+                orders: payloadOrders,
+                activeTime: mesa.activeTime || "0 min",
+              };
+
+              if (orden) {
+                payload.order_id = orden.id;
               } else {
+                payload.new_order = true;
+              }
+
+              console.log("========== UPDATE STATUS ==========");
+              console.log("URL:", updateUrl);
+              console.log("PAYLOAD:", payload);
+
+              const response = await fetch(updateUrl, {
+                method: "PATCH",
+                headers,
+                body: JSON.stringify(payload)
+              });
+
+              const responseData = await parseJsonResponse(response, "UPDATE STATUS");
+
+              if (!response.ok) {
+                throw new Error(JSON.stringify(responseData));
+              }
+
+              if (!orden && responseData?.table?.activeOrderId) {
                 const sesion = await obtenerSesionActual();
-
-                await guardarPropietarioLocal(
-                  orden.id,
-                  sesion.userId
-                );
+                await guardarPropietarioLocal(responseData.table.activeOrderId, sesion.userId);
               }
-
-              for (const item of carrito) {
-                const orderItemData = {
-                  order: orden.id,
-                  product: item.producto.id,
-                  quantity: item.cantidad,
-                };
-
-                console.log("========== CREAR ITEM ==========");
-                console.log("URL CREAR ITEM:", ORDER_ITEMS_URL);
-                console.log("PAYLOAD ITEM:", orderItemData);
-
-                const itemResponse = await fetch(ORDER_ITEMS_URL, {
-                  method: "POST",
-                  headers,
-                  body: JSON.stringify(orderItemData),
-                });
-
-                const itemCreated = await parseJsonResponse(
-                  itemResponse,
-                  "CREAR ITEM"
-                );
-
-                if (!itemResponse.ok) {
-                  throw new Error(JSON.stringify(itemCreated));
-                }
-              }
-
-              await marcarMesaOcupada();
 
               setCarrito([]);
 
