@@ -40,6 +40,13 @@ export default function WebSocketProvider({ children }: { children: React.ReactN
             // Invalidamos el caché de React Query. Esto causará que cualquier 
             // pantalla que muestre mesas (pos, caja) se recargue silenciosamente.
             queryClient.invalidateQueries({ queryKey: ["tables"] });
+          } else if (data.action === "inventory_updated") {
+            queryClient.invalidateQueries({ queryKey: ["inventory-products"] });
+          } else if (data.action === "menu_updated") {
+            queryClient.invalidateQueries({ queryKey: ["menu-categories"] });
+          } else if (data.action === "shift_updated") {
+            queryClient.invalidateQueries({ queryKey: ["currentShift"] });
+            queryClient.invalidateQueries({ queryKey: ["employeeShifts"] });
           }
         } catch (error) {
           console.error("[WebSocket Web] Error parseando mensaje:", error);
