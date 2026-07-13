@@ -10,58 +10,53 @@ import {
   TextInput,
   ScrollView,
 } from "react-native";
-import { colors } from "../theme/colors";
+import Icon from "react-native-vector-icons/Feather";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 
 import { API_BASE_URL } from "../services/config";
+
+// Asegura que los íconos Feather estén disponibles en Android.
+if (typeof Icon.loadFont === "function") {
+  Icon.loadFont().catch(() => {});
+}
 
 const PRODUCTS_URL = `${API_BASE_URL}/api/inventory/products/`;
 const ORDERS_URL = `${API_BASE_URL}/api/orders/orders/`;
 const ORDER_OWNERS_STORAGE_KEY = "orderOwnersById";
 const ORDER_ITEMS_URL = `${API_BASE_URL}/api/orders/order-items/`;
 const TABLES_URL = `${API_BASE_URL}/api/tables/`;
+const SHIFTS_URL = `${API_BASE_URL}/api/users/shifts/`;
 
 const palette = {
-  light: colors.restaurantLight ?? "#78B9B5",
-  accent:
-    colors.restaurantAccent ??
-    colors.accent ??
-    "#0F828C",
-  primary:
-    colors.restaurantPrimary ??
-    colors.primary ??
-    "#065084",
-  dark:
-    colors.restaurantDark ??
-    colors.dark ??
-    "#320A6B",
+  light: "#78B9B5",
+  accent: "#0F828C",
+  primary: "#065084",
+  dark: "#320A6B",
+  purpleMedium: "#4B1D7A",
 
-  background: colors.background ?? "#F8FAFC",
-  surface: colors.surface ?? colors.white ?? "#FFFFFF",
-  card: colors.card ?? colors.white ?? "#FFFFFF",
-  muted: colors.muted ?? "#E8F3F2",
+  background: "#F6F9FB",
+  surface: "#FFFFFF",
+  card: "#DDEAF0",
+  muted: "#EDF3F5",
 
-  text: colors.text ?? "#0F172A",
-  textSecondary: colors.textSecondary ?? "#475569",
-  gray: colors.gray ?? "#64748B",
-  placeholder: colors.placeholder ?? "#94A3B8",
-  border: colors.border ?? "#DCE7E7",
+  text: "#26055F",
+  textSecondary: "#56667A",
+  gray: "#728196",
+  placeholder: "#97A5B5",
+  border: "#D8E3E8",
 
-  success: colors.success ?? "#15803D",
-  successBackground:
-    colors.successBackground ?? "#DCFCE7",
-  warning: colors.warning ?? "#B45309",
-  warningBackground:
-    colors.warningBackground ?? "#FEF3C7",
-  danger: colors.danger ?? "#DC2626",
-  dangerBackground:
-    colors.dangerBackground ?? "#FEE2E2",
-  info: colors.info ?? "#065084",
-  infoBackground:
-    colors.infoBackground ?? "#E0F2FE",
+  success: "#0B8A56",
+  successBackground: "#ECF8F2",
+  warning: "#C67A1D",
+  warningBackground: "#FFF6E7",
+  danger: "#FF6268",
+  dangerBackground: "#FFF0F1",
+  info: "#065084",
+  infoBackground: "#E7F1F6",
 
-  white: colors.white ?? "#FFFFFF",
+  white: "#FFFFFF",
+  overlay: "rgba(20, 7, 48, 0.48)",
 };
 
 export default function PedidoScreen({ route, navigation }) {
@@ -81,6 +76,9 @@ export default function PedidoScreen({ route, navigation }) {
   const [enviando, setEnviando] = useState(false);
   const [vista, setVista] = useState("productos");
   const [actualizandoMenu, setActualizandoMenu] = useState(false);
+
+  const [turnoActivo, setTurnoActivo] = useState(false);
+  const [cargandoTurno, setCargandoTurno] = useState(true);
 
   const getMesaNumber = () => {
     return mesa?.table_number ?? mesa?.number ?? "";
@@ -260,6 +258,202 @@ export default function PedidoScreen({ route, navigation }) {
     }
 
     return usuarioOrden ?? null;
+  };
+
+  const obtenerPropietarioTurno = (turno) => {
+    const candidato =
+      turno?.user ??
+      turno?.user_id ??
+      turno?.employee ??
+      turno?.employee_id ??
+      turno?.waiter ??
+      turno?.waiter_id ??
+      turno?.created_by ??
+      turno?.created_by_id ??
+      turno?.staff ??
+      turno?.staff_id;
+
+    if (
+      typeof candidato === "object" &&
+      candidato !== null
+    ) {
+      return {
+        id:
+          candidato.id ??
+          candidato.user_id ??
+          candidato.pk ??
+          null,
+        username:
+          candidato.username ??
+          candidato.email ??
+          candidato.user_name ??
+          "",
+      };
+    }
+
+    return {
+      id:
+        candidato !== null &&
+        candidato !== undefined
+          ? candidato
+          : null,
+      username:
+        turno?.username ??
+        turno?.user_name ??
+        turno?.user_email ??
+        turno?.employee_email ??
+        "",
+    };
+  };
+
+  const turnoPerteneceAlUsuario = (
+    turno,
+    userIdActual,
+    usernameActual
+  ) => {
+    const propietario = obtenerPropietarioTurno(turno);
+
+    const coincideId =
+      propietario.id !== null &&
+      propietario.id !== undefined &&
+      userIdActual &&
+      String(propietario.id) === String(userIdActual);
+
+    const coincideUsername =
+      propietario.username &&
+      usernameActual &&
+      String(propietario.username).toLowerCase() ===
+        String(usernameActual).toLowerCase();
+
+    return coincideId || coincideUsername;
+  };
+
+  const verificarTurnoActivo = async (
+    actualizarInterfaz = true
+  ) => {
+    const tokenConsulta = await AsyncStorage.getItem(
+      "accessToken"
+    );
+
+    try {
+      if (actualizarInterfaz) {
+        setCargandoTurno(true);
+      }
+
+      if (!tokenConsulta) {
+        throw new Error(
+          "No existe token de autenticación."
+        );
+      }
+
+      const userIdGuardado =
+        await AsyncStorage.getItem("userId");
+      const userIdToken =
+        obtenerUserIdDesdeToken(tokenConsulta);
+      const userIdActual =
+        userIdGuardado || userIdToken;
+      const loginUsername =
+        await AsyncStorage.getItem("loginUsername");
+
+      if (!userIdActual && !loginUsername) {
+        throw new Error(
+          "No se pudo identificar al usuario activo."
+        );
+      }
+
+      const response = await fetch(SHIFTS_URL, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${tokenConsulta}`,
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+      });
+
+      const data = await parseJsonResponse(
+        response,
+        "VERIFICAR TURNO"
+      );
+
+      if (!response.ok) {
+        throw new Error(JSON.stringify(data));
+      }
+
+      const tokenActual =
+        await AsyncStorage.getItem("accessToken");
+
+      if (tokenActual !== tokenConsulta) {
+        if (actualizarInterfaz) {
+          setTurnoActivo(false);
+        }
+        return false;
+      }
+
+      const todosLosTurnos = normalizarLista(data);
+
+      const respuestaExponePropietario =
+        todosLosTurnos.some((turno) => {
+          const propietario =
+            obtenerPropietarioTurno(turno);
+
+          return (
+            propietario.id !== null &&
+            propietario.id !== undefined
+          ) || Boolean(propietario.username);
+        });
+
+      const turnosDelUsuario =
+        respuestaExponePropietario
+          ? todosLosTurnos.filter((turno) =>
+              turnoPerteneceAlUsuario(
+                turno,
+                userIdActual,
+                loginUsername
+              )
+            )
+          : todosLosTurnos;
+
+      const existeTurnoActivo =
+        turnosDelUsuario.some(
+          (turno) => turno?.is_active === true
+        );
+
+      if (actualizarInterfaz) {
+        setTurnoActivo(existeTurnoActivo);
+      }
+
+      return existeTurnoActivo;
+    } catch (error) {
+      console.log(
+        "Error verificando turno para pedido:",
+        error
+      );
+
+      if (actualizarInterfaz) {
+        setTurnoActivo(false);
+      }
+
+      return false;
+    } finally {
+      if (actualizarInterfaz) {
+        setCargandoTurno(false);
+      }
+    }
+  };
+
+  const mostrarTurnoCerrado = () => {
+    Alert.alert(
+      "Turno cerrado",
+      "No puedes registrar pedidos mientras tu turno esté cerrado. Regresa al mapa de mesas e inicia tu turno."
+    );
+  };
+
+  const actualizarPantalla = async () => {
+    await Promise.all([
+      cargarProductos(false),
+      verificarTurnoActivo(true),
+    ]);
   };
 
   const obtenerDetalleOrden = async (orderId) => {
@@ -525,6 +719,7 @@ const cargarProductos = async (mostrarLoading = true) => {
 useFocusEffect(
   useCallback(() => {
     cargarProductos(true);
+    verificarTurnoActivo(true);
   }, [])
 );
 
@@ -622,6 +817,19 @@ useFocusEffect(
       return;
     }
 
+    setCargandoTurno(true);
+
+    const turnoConfirmado =
+      await verificarTurnoActivo(false);
+
+    setCargandoTurno(false);
+    setTurnoActivo(turnoConfirmado);
+
+    if (!turnoConfirmado) {
+      mostrarTurnoCerrado();
+      return;
+    }
+
     Alert.alert(
       ordenPendiente ? "Agregar al pedido" : "Crear pedido",
       `Mesa ${getMesaNumber()}\nProductos nuevos: ${cantidadCarrito}\nTotal por agregar: Bs. ${totalCarrito.toFixed(
@@ -638,6 +846,15 @@ useFocusEffect(
             setEnviando(true);
 
             try {
+              const turnoSigueActivo =
+                await verificarTurnoActivo(false);
+
+              setTurnoActivo(turnoSigueActivo);
+
+              if (!turnoSigueActivo) {
+                throw new Error("TURNO_CERRADO");
+              }
+
               const headers = await getAuthHeaders();
 
               let orden = await buscarOrdenPendienteDeMesa();
@@ -754,10 +971,15 @@ useFocusEffect(
               );
             } catch (error) {
               console.log("Error enviando pedido:", error);
-              Alert.alert(
-                "Error",
-                "No se pudo registrar el pedido. Revisa la consola para ver el detalle del backend."
-              );
+
+              if (error?.message === "TURNO_CERRADO") {
+                mostrarTurnoCerrado();
+              } else {
+                Alert.alert(
+                  "Error",
+                  "No se pudo registrar el pedido. Revisa la consola para ver el detalle del backend."
+                );
+              }
             } finally {
               setEnviando(false);
             }
@@ -770,13 +992,30 @@ useFocusEffect(
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={palette.primary} />
+        <View style={styles.loadingLogo}>
+          <Text style={styles.loadingLogoText}>N</Text>
+        </View>
+
+        <ActivityIndicator
+          size="large"
+          color={palette.primary}
+        />
+
+        <Text style={styles.loadingTitle}>
+          Preparando el menú
+        </Text>
+
+        <Text style={styles.loadingSubtitle}>
+          Cargando productos y pedido actual...
+        </Text>
       </View>
     );
   }
 
   const categorias = [
-    ...new Set(productos.map((producto) => producto.categoria)),
+    ...new Set(
+      productos.map((producto) => producto.categoria)
+    ),
   ];
 
   const subcategorias = categoriaSeleccionada
@@ -789,7 +1028,8 @@ useFocusEffect(
             )
             .map(
               (producto) =>
-                producto.subcategoria || "Sin subcategoría"
+                producto.subcategoria ||
+                "Sin subcategoría"
             )
         ),
       ]
@@ -799,229 +1039,559 @@ useFocusEffect(
     categoriaSeleccionada && subcategoriaSeleccionada
       ? productos.filter(
           (producto) =>
-            producto.categoria === categoriaSeleccionada &&
-            (producto.subcategoria || "Sin subcategoría") ===
+            producto.categoria ===
+              categoriaSeleccionada &&
+            (producto.subcategoria ||
+              "Sin subcategoría") ===
               subcategoriaSeleccionada
         )
       : [];
 
+  const renderCategoria = ({ item }) => {
+    const cantidad = productos.filter(
+      (producto) => producto.categoria === item
+    ).length;
+
+    return (
+      <TouchableOpacity
+        style={styles.categoriaCard}
+        activeOpacity={0.82}
+        onPress={() => {
+          setCategoriaSeleccionada(item);
+          setSubcategoriaSeleccionada(null);
+        }}
+      >
+        <View style={styles.categoryIconBox}>
+          <Icon
+            name="book-open"
+            size={21}
+            color={palette.primary}
+          />
+        </View>
+
+        <View style={styles.categoryTextBox}>
+          <Text style={styles.categoriaNombre}>
+            {item}
+          </Text>
+
+          <Text style={styles.categoriaHint}>
+            {cantidad} producto
+            {cantidad === 1 ? "" : "s"} disponible
+            {cantidad === 1 ? "" : "s"}
+          </Text>
+        </View>
+
+        <View style={styles.categoryArrow}>
+          <Icon
+            name="chevron-right"
+            size={19}
+            color={palette.white}
+          />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderSubcategoria = ({ item }) => {
+    const cantidad = productos.filter(
+      (producto) =>
+        producto.categoria === categoriaSeleccionada &&
+        (producto.subcategoria || "Sin subcategoría") ===
+          item
+    ).length;
+
+    return (
+      <TouchableOpacity
+        style={styles.categoriaCard}
+        activeOpacity={0.82}
+        onPress={() => setSubcategoriaSeleccionada(item)}
+      >
+        <View style={styles.categoryIconBox}>
+          <Icon
+            name="layers"
+            size={21}
+            color={palette.accent}
+          />
+        </View>
+
+        <View style={styles.categoryTextBox}>
+          <Text style={styles.categoriaNombre}>
+            {item}
+          </Text>
+
+          <Text style={styles.categoriaHint}>
+            {cantidad} opción
+            {cantidad === 1 ? "" : "es"}
+          </Text>
+        </View>
+
+        <View style={styles.categoryArrow}>
+          <Icon
+            name="chevron-right"
+            size={19}
+            color={palette.white}
+          />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderProducto = ({ item }) => {
+    const enCarrito = carrito.find(
+      (carritoItem) =>
+        carritoItem.producto.id === item.id
+    );
+
+    return (
+      <View style={styles.productoCard}>
+        <View style={styles.productIconBox}>
+          <Icon
+            name="package"
+            size={20}
+            color={palette.accent}
+          />
+        </View>
+
+        <View style={styles.productoInfo}>
+          <Text style={styles.productoNombre}>
+            {item.nombre}
+          </Text>
+
+          <Text style={styles.productoSubcategoria}>
+            {item.subcategoria}
+          </Text>
+
+          <Text style={styles.productoPrecio}>
+            Bs. {item.precio.toFixed(2)}
+          </Text>
+        </View>
+
+        {enCarrito ? (
+          <View style={styles.cantidadControl}>
+            <TouchableOpacity
+              onPress={() =>
+                cambiarCantidad(item.id, -1)
+              }
+              style={styles.ctrlBtn}
+            >
+              <Icon
+                name="minus"
+                size={17}
+                color={palette.dark}
+              />
+            </TouchableOpacity>
+
+            <Text style={styles.cantidadNum}>
+              {enCarrito.cantidad}
+            </Text>
+
+            <TouchableOpacity
+              onPress={() =>
+                cambiarCantidad(item.id, 1)
+              }
+              style={[
+                styles.ctrlBtn,
+                styles.ctrlBtnAdd,
+              ]}
+            >
+              <Icon
+                name="plus"
+                size={17}
+                color={palette.white}
+              />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => agregarAlCarrito(item)}
+          >
+            <Icon
+              name="plus"
+              size={16}
+              color={palette.white}
+            />
+            <Text style={styles.addBtnText}>
+              Agregar
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={styles.topBar}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
         >
-          <Text style={styles.backText}>← Mesas</Text>
+          <Icon
+            name="arrow-left"
+            size={21}
+            color={palette.white}
+          />
         </TouchableOpacity>
 
-<View style={styles.headerCenter}>
-  <Text style={styles.headerTitle}>Mesa {getMesaNumber()}</Text>
-
-  {ordenPendiente && (
-    <Text style={styles.pedidoBadge}>
-      Pedido #{ordenPendiente.id}
-    </Text>
-  )}
-</View>
-
-<TouchableOpacity
-  style={[
-    styles.actualizarMenuBtn,
-    actualizandoMenu && styles.actualizarMenuBtnDisabled,
-  ]}
-  onPress={() => cargarProductos(false)}
-  disabled={actualizandoMenu}
->
-  <Text style={styles.actualizarMenuText}>
-    {actualizandoMenu ? "..." : "Actualizar"}
-  </Text>
-</TouchableOpacity>
-
-<TouchableOpacity
-  style={styles.carritoBtn}
-  onPress={() =>
-    setVista(
-      vista === "productos" ? "carrito" : "productos"
-    )
-  }
->
-          <Text style={styles.carritoText}>
-            {vista === "productos"
-              ? `🛒 ${cantidadTotal}`
-              : "← Productos"}
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>
+            Mesa {getMesaNumber()}
           </Text>
+
+          <Text style={styles.headerSubtitle}>
+            {ordenPendiente
+              ? `Orden #${ordenPendiente.id}`
+              : "Nuevo pedido"}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.refreshBtn,
+            (actualizandoMenu || cargandoTurno) &&
+              styles.buttonDisabled,
+          ]}
+          onPress={actualizarPantalla}
+          disabled={
+            actualizandoMenu || cargandoTurno
+          }
+        >
+          {actualizandoMenu || cargandoTurno ? (
+            <ActivityIndicator
+              size="small"
+              color={palette.primary}
+            />
+          ) : (
+            <Icon
+              name="refresh-cw"
+              size={18}
+              color={palette.primary}
+            />
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <View
+        style={[
+          styles.shiftBanner,
+          turnoActivo
+            ? styles.shiftBannerActive
+            : styles.shiftBannerClosed,
+        ]}
+      >
+        <View
+          style={[
+            styles.shiftIconBox,
+            turnoActivo
+              ? styles.shiftIconActive
+              : styles.shiftIconClosed,
+          ]}
+        >
+          <Icon
+            name={
+              cargandoTurno
+                ? "loader"
+                : turnoActivo
+                ? "check-circle"
+                : "lock"
+            }
+            size={18}
+            color={
+              turnoActivo
+                ? palette.success
+                : palette.warning
+            }
+          />
+        </View>
+
+        <View style={styles.shiftTextBox}>
+          <Text style={styles.shiftTitle}>
+            {cargandoTurno
+              ? "Verificando turno..."
+              : turnoActivo
+              ? "Turno activo"
+              : "Turno cerrado"}
+          </Text>
+
+          <Text style={styles.shiftDescription}>
+            {cargandoTurno
+              ? "Espera mientras confirmamos tu jornada."
+              : turnoActivo
+              ? "Puedes registrar productos en esta mesa."
+              : "Puedes consultar el menú, pero no enviar pedidos."}
+          </Text>
+        </View>
+
+        {!turnoActivo && !cargandoTurno ? (
+          <TouchableOpacity
+            style={styles.goTablesBtn}
+            onPress={() => navigation.navigate("Mesas")}
+          >
+            <Text style={styles.goTablesText}>
+              Ir a Mesas
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      <View style={styles.tabs}>
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            vista === "productos" &&
+              styles.tabActive,
+          ]}
+          onPress={() => setVista("productos")}
+        >
+          <Icon
+            name="book-open"
+            size={17}
+            color={
+              vista === "productos"
+                ? palette.white
+                : palette.primary
+            }
+          />
+          <Text
+            style={[
+              styles.tabText,
+              vista === "productos" &&
+                styles.tabTextActive,
+            ]}
+          >
+            Menú
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.tab,
+            vista === "carrito" &&
+              styles.tabActive,
+          ]}
+          onPress={() => setVista("carrito")}
+        >
+          <Icon
+            name="shopping-cart"
+            size={17}
+            color={
+              vista === "carrito"
+                ? palette.white
+                : palette.primary
+            }
+          />
+          <Text
+            style={[
+              styles.tabText,
+              vista === "carrito" &&
+                styles.tabTextActive,
+            ]}
+          >
+            Pedido
+          </Text>
+
+          <View
+            style={[
+              styles.tabCount,
+              vista === "carrito" &&
+                styles.tabCountActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.tabCountText,
+                vista === "carrito" &&
+                  styles.tabCountTextActive,
+              ]}
+            >
+              {cantidadTotal}
+            </Text>
+          </View>
         </TouchableOpacity>
       </View>
 
       {vista === "productos" && (
-        <View style={{ flex: 1 }}>
-          {!categoriaSeleccionada && (
-            <FlatList
-              data={categorias}
-              keyExtractor={(item) => item}
-              contentContainerStyle={styles.list}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.categoriaCard}
-                  onPress={() => {
-                    setCategoriaSeleccionada(item);
-                    setSubcategoriaSeleccionada(null);
-                  }}
-                >
-                  <Text style={styles.categoriaNombre}>{item}</Text>
-                  <Text style={styles.categoriaHint}>
-                    Ver subcategorías →
+        <View style={styles.content}>
+          {!categoriaSeleccionada ? (
+            <>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>
+                    Categorías
                   </Text>
-                </TouchableOpacity>
-              )}
-              ListEmptyComponent={
-                <Text style={styles.emptyText}>
-                  No hay categorías disponibles.
-                </Text>
-              }
-            />
-          )}
+                  <Text style={styles.sectionSubtitle}>
+                    Selecciona el tipo de producto
+                  </Text>
+                </View>
 
-          {categoriaSeleccionada &&
-            !subcategoriaSeleccionada && (
-              <View style={{ flex: 1 }}>
+                <View style={styles.sectionBadge}>
+                  <Text style={styles.sectionBadgeText}>
+                    {categorias.length}
+                  </Text>
+                </View>
+              </View>
+
+              <FlatList
+                data={categorias}
+                keyExtractor={(item) => item}
+                contentContainerStyle={styles.list}
+                renderItem={renderCategoria}
+                showsVerticalScrollIndicator={false}
+                ListEmptyComponent={
+                  <View style={styles.emptyState}>
+                    <Icon
+                      name="inbox"
+                      size={31}
+                      color={palette.placeholder}
+                    />
+                    <Text style={styles.emptyTitle}>
+                      Sin categorías disponibles
+                    </Text>
+                  </View>
+                }
+              />
+            </>
+          ) : !subcategoriaSeleccionada ? (
+            <>
+              <View style={styles.breadcrumbRow}>
                 <TouchableOpacity
-                  style={styles.volverNivelBtn}
+                  style={styles.breadcrumbButton}
                   onPress={() => {
                     setCategoriaSeleccionada(null);
                     setSubcategoriaSeleccionada(null);
                   }}
                 >
-                  <Text style={styles.volverNivelText}>
-                    ← Categorías
+                  <Icon
+                    name="arrow-left"
+                    size={16}
+                    color={palette.primary}
+                  />
+                  <Text style={styles.breadcrumbText}>
+                    Categorías
                   </Text>
                 </TouchableOpacity>
 
-                <FlatList
-                  data={subcategorias}
-                  keyExtractor={(item) => item}
-                  contentContainerStyle={styles.list}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={styles.categoriaCard}
-                      onPress={() =>
-                        setSubcategoriaSeleccionada(item)
-                      }
-                    >
-                      <Text style={styles.categoriaNombre}>
-                        {item}
-                      </Text>
-                      <Text style={styles.categoriaHint}>
-                        Ver productos →
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                />
+                <Text
+                  style={styles.breadcrumbCurrent}
+                  numberOfLines={1}
+                >
+                  {categoriaSeleccionada}
+                </Text>
               </View>
-            )}
 
-          {categoriaSeleccionada &&
-            subcategoriaSeleccionada && (
-              <View style={{ flex: 1 }}>
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>
+                    Subcategorías
+                  </Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Elige una sección del menú
+                  </Text>
+                </View>
+
+                <View style={styles.sectionBadge}>
+                  <Text style={styles.sectionBadgeText}>
+                    {subcategorias.length}
+                  </Text>
+                </View>
+              </View>
+
+              <FlatList
+                data={subcategorias}
+                keyExtractor={(item) => item}
+                contentContainerStyle={styles.list}
+                renderItem={renderSubcategoria}
+                showsVerticalScrollIndicator={false}
+              />
+            </>
+          ) : (
+            <>
+              <View style={styles.breadcrumbRow}>
                 <TouchableOpacity
-                  style={styles.volverNivelBtn}
+                  style={styles.breadcrumbButton}
                   onPress={() =>
                     setSubcategoriaSeleccionada(null)
                   }
                 >
-                  <Text style={styles.volverNivelText}>
-                    ← {categoriaSeleccionada}
+                  <Icon
+                    name="arrow-left"
+                    size={16}
+                    color={palette.primary}
+                  />
+                  <Text style={styles.breadcrumbText}>
+                    {categoriaSeleccionada}
                   </Text>
                 </TouchableOpacity>
 
-                <FlatList
-                  data={productosFiltrados}
-                  keyExtractor={(item) => item.id.toString()}
-                  contentContainerStyle={styles.list}
-                  renderItem={({ item }) => {
-                    const enCarrito = carrito.find(
-                      (carritoItem) =>
-                        carritoItem.producto.id === item.id
-                    );
-
-                    return (
-                      <View style={styles.productoCard}>
-                        <View style={styles.productoInfo}>
-                          <Text style={styles.productoNombre}>
-                            {item.nombre}
-                          </Text>
-
-                          <Text style={styles.productoPrecio}>
-                            Bs. {item.precio.toFixed(2)}
-                          </Text>
-
-                          <Text style={styles.productoCategoria}>
-                            {item.categoria}
-                          </Text>
-
-                          {item.subcategoria ? (
-                            <Text
-                              style={
-                                styles.productoSubcategoria
-                              }
-                            >
-                              {item.subcategoria}
-                            </Text>
-                          ) : null}
-                        </View>
-
-                        {enCarrito ? (
-                          <View style={styles.cantidadControl}>
-                            <TouchableOpacity
-                              onPress={() =>
-                                cambiarCantidad(item.id, -1)
-                              }
-                              style={styles.ctrlBtn}
-                            >
-                              <Text style={styles.ctrlBtnText}>
-                                −
-                              </Text>
-                            </TouchableOpacity>
-
-                            <Text style={styles.cantidadNum}>
-                              {enCarrito.cantidad}
-                            </Text>
-
-                            <TouchableOpacity
-                              onPress={() =>
-                                cambiarCantidad(item.id, 1)
-                              }
-                              style={styles.ctrlBtn}
-                            >
-                              <Text style={styles.ctrlBtnText}>
-                                +
-                              </Text>
-                            </TouchableOpacity>
-                          </View>
-                        ) : (
-                          <TouchableOpacity
-                            style={styles.addBtn}
-                            onPress={() =>
-                              agregarAlCarrito(item)
-                            }
-                          >
-                            <Text style={styles.addBtnText}>
-                              Agregar
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    );
-                  }}
-                />
+                <Text
+                  style={styles.breadcrumbCurrent}
+                  numberOfLines={1}
+                >
+                  {subcategoriaSeleccionada}
+                </Text>
               </View>
-            )}
+
+              <View style={styles.sectionHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>
+                    Productos
+                  </Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Agrega productos al pedido
+                  </Text>
+                </View>
+
+                <View style={styles.sectionBadge}>
+                  <Text style={styles.sectionBadgeText}>
+                    {productosFiltrados.length}
+                  </Text>
+                </View>
+              </View>
+
+              <FlatList
+                data={productosFiltrados}
+                keyExtractor={(item) =>
+                  item.id.toString()
+                }
+                contentContainerStyle={styles.list}
+                renderItem={renderProducto}
+                showsVerticalScrollIndicator={false}
+              />
+            </>
+          )}
         </View>
       )}
 
       {vista === "carrito" && (
-        <ScrollView contentContainerStyle={styles.list}>
+        <ScrollView
+          contentContainerStyle={styles.orderContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.orderSummaryCard}>
+            <View style={styles.orderSummaryIcon}>
+              <Icon
+                name="shopping-bag"
+                size={20}
+                color={palette.primary}
+              />
+            </View>
+
+            <View style={styles.orderSummaryText}>
+              <Text style={styles.orderSummaryTitle}>
+                Resumen de la mesa
+              </Text>
+              <Text style={styles.orderSummarySubtitle}>
+                {cantidadTotal} producto
+                {cantidadTotal === 1 ? "" : "s"} en total
+              </Text>
+            </View>
+
+            <Text style={styles.orderSummaryTotal}>
+              Bs. {totalGeneral.toFixed(2)}
+            </Text>
+          </View>
+
           {cargandoPedidoActual ? (
             <View style={styles.loadingPedidoBox}>
               <ActivityIndicator
@@ -1033,70 +1603,127 @@ useFocusEffect(
               </Text>
             </View>
           ) : pedidoActual.length > 0 ? (
-            <View style={styles.pedidoActualBox}>
-              <Text style={styles.sectionTitle}>
-                Pedido actual
-              </Text>
+            <View style={styles.orderSection}>
+              <View style={styles.orderSectionHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>
+                    Pedido registrado
+                  </Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Orden pendiente #{ordenPendiente?.id}
+                  </Text>
+                </View>
 
-              <Text style={styles.sectionSubtitle}>
-                Orden pendiente #{ordenPendiente?.id}
-              </Text>
+                <View style={styles.registeredBadge}>
+                  <Text style={styles.registeredBadgeText}>
+                    {cantidadPedidoActual}
+                  </Text>
+                </View>
+              </View>
 
               {pedidoActual.map((item) => (
                 <View
                   key={`actual-${item.id}`}
-                  style={styles.pedidoActualItem}
+                  style={styles.registeredItem}
                 >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.pedidoActualNombre}>
+                  <View style={styles.smallProductIcon}>
+                    <Icon
+                      name="check"
+                      size={15}
+                      color={palette.success}
+                    />
+                  </View>
+
+                  <View style={styles.registeredItemInfo}>
+                    <Text style={styles.itemName}>
                       {item.producto.nombre}
                     </Text>
-
-                    <Text style={styles.pedidoActualCantidad}>
-                      {item.cantidad} unidad(es)
+                    <Text style={styles.itemMeta}>
+                      {item.cantidad} unidad
+                      {item.cantidad === 1 ? "" : "es"}
                     </Text>
                   </View>
 
-                  <Text style={styles.pedidoActualPrecio}>
+                  <Text style={styles.itemPrice}>
                     Bs.{" "}
                     {(item.precio * item.cantidad).toFixed(2)}
                   </Text>
                 </View>
               ))}
 
-              <View style={styles.pedidoActualTotalRow}>
-                <Text style={styles.pedidoActualTotalLabel}>
-                  Total actual
+              <View style={styles.subtotalRow}>
+                <Text style={styles.subtotalLabel}>
+                  Total registrado
                 </Text>
-
-                <Text style={styles.pedidoActualTotalValue}>
+                <Text style={styles.subtotalValue}>
                   Bs. {totalPedidoActual.toFixed(2)}
                 </Text>
               </View>
             </View>
           ) : (
-            <View style={styles.sinPedidoBox}>
-              <Text style={styles.sinPedidoText}>
-                Esta mesa todavía no tiene productos registrados.
+            <View style={styles.noOrderBox}>
+              <Icon
+                name="file-plus"
+                size={25}
+                color={palette.primary}
+              />
+              <Text style={styles.noOrderTitle}>
+                Pedido nuevo
+              </Text>
+              <Text style={styles.noOrderText}>
+                Esta mesa todavía no tiene productos
+                registrados.
               </Text>
             </View>
           )}
 
-          {carrito.length > 0 && (
-            <>
-              <Text style={styles.sectionTitle}>
-                Productos por agregar
-              </Text>
+          {carrito.length > 0 ? (
+            <View style={styles.orderSection}>
+              <View style={styles.orderSectionHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>
+                    Productos por agregar
+                  </Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Revisa cantidades y observaciones
+                  </Text>
+                </View>
+
+                <View style={styles.newItemsBadge}>
+                  <Text style={styles.newItemsBadgeText}>
+                    {cantidadCarrito}
+                  </Text>
+                </View>
+              </View>
 
               {carrito.map((item) => (
                 <View
                   key={`nuevo-${item.producto.id}`}
-                  style={styles.carritoItem}
+                  style={styles.cartItem}
                 >
-                  <View style={styles.carritoItemTop}>
-                    <Text style={styles.carritoNombre}>
-                      {item.producto.nombre}
-                    </Text>
+                  <View style={styles.cartItemTop}>
+                    <View style={styles.cartItemHeading}>
+                      <View style={styles.smallProductIcon}>
+                        <Icon
+                          name="plus"
+                          size={15}
+                          color={palette.accent}
+                        />
+                      </View>
+
+                      <View style={styles.cartItemText}>
+                        <Text style={styles.itemName}>
+                          {item.producto.nombre}
+                        </Text>
+                        <Text style={styles.itemPrice}>
+                          Bs.{" "}
+                          {(
+                            item.producto.precio *
+                            item.cantidad
+                          ).toFixed(2)}
+                        </Text>
+                      </View>
+                    </View>
 
                     <View style={styles.cantidadControl}>
                       <TouchableOpacity
@@ -1108,7 +1735,11 @@ useFocusEffect(
                         }
                         style={styles.ctrlBtn}
                       >
-                        <Text style={styles.ctrlBtnText}>−</Text>
+                        <Icon
+                          name="minus"
+                          size={16}
+                          color={palette.dark}
+                        />
                       </TouchableOpacity>
 
                       <Text style={styles.cantidadNum}>
@@ -1122,39 +1753,76 @@ useFocusEffect(
                             1
                           )
                         }
-                        style={styles.ctrlBtn}
+                        style={[
+                          styles.ctrlBtn,
+                          styles.ctrlBtnAdd,
+                        ]}
                       >
-                        <Text style={styles.ctrlBtnText}>+</Text>
+                        <Icon
+                          name="plus"
+                          size={16}
+                          color={palette.white}
+                        />
                       </TouchableOpacity>
                     </View>
                   </View>
 
-                  <Text style={styles.carritoSubtotal}>
-                    Bs.{" "}
-                    {(
-                      item.producto.precio * item.cantidad
-                    ).toFixed(2)}
-                  </Text>
-
-                  <TextInput
-                    style={styles.notaInput}
-                    placeholder="Nota (ej: sin cebolla)"
-                    placeholderTextColor={palette.placeholder}
-                    value={item.notas}
-                    onChangeText={(texto) =>
-                      actualizarNota(item.producto.id, texto)
-                    }
-                  />
+                  <View style={styles.noteInputWrapper}>
+                    <Icon
+                      name="message-square"
+                      size={15}
+                      color={palette.accent}
+                    />
+                    <TextInput
+                      style={styles.notaInput}
+                      placeholder="Observación: sin cebolla, sin picante..."
+                      placeholderTextColor={
+                        palette.placeholder
+                      }
+                      value={item.notas}
+                      onChangeText={(texto) =>
+                        actualizarNota(
+                          item.producto.id,
+                          texto
+                        )
+                      }
+                    />
+                  </View>
                 </View>
               ))}
-            </>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.addProductsPrompt}
+              onPress={() => setVista("productos")}
+            >
+              <Icon
+                name="plus-circle"
+                size={21}
+                color={palette.primary}
+              />
+              <View style={styles.addProductsPromptText}>
+                <Text style={styles.addProductsPromptTitle}>
+                  Agregar productos
+                </Text>
+                <Text style={styles.addProductsPromptSubtitle}>
+                  Regresa al menú para continuar
+                </Text>
+              </View>
+              <Icon
+                name="chevron-right"
+                size={19}
+                color={palette.primary}
+              />
+            </TouchableOpacity>
           )}
 
-          {(pedidoActual.length > 0 || carrito.length > 0) && (
+          {(pedidoActual.length > 0 ||
+            carrito.length > 0) && (
             <View style={styles.totalBox}>
               <View style={styles.totalLine}>
                 <Text style={styles.totalLabel}>
-                  Pedido actual
+                  Pedido registrado
                 </Text>
                 <Text style={styles.totalValue}>
                   Bs. {totalPedidoActual.toFixed(2)}
@@ -1163,7 +1831,7 @@ useFocusEffect(
 
               <View style={styles.totalLine}>
                 <Text style={styles.totalLabel}>
-                  Por agregar
+                  Productos nuevos
                 </Text>
                 <Text style={styles.totalValue}>
                   Bs. {totalCarrito.toFixed(2)}
@@ -1171,42 +1839,73 @@ useFocusEffect(
               </View>
 
               <View style={styles.totalGeneralLine}>
-                <Text style={styles.totalGeneralLabel}>
-                  Total de la mesa
-                </Text>
+                <View>
+                  <Text style={styles.totalGeneralLabel}>
+                    TOTAL DE LA MESA
+                  </Text>
+                  <Text style={styles.totalCaption}>
+                    Consumo acumulado
+                  </Text>
+                </View>
+
                 <Text style={styles.totalGeneralValue}>
                   Bs. {totalGeneral.toFixed(2)}
                 </Text>
               </View>
             </View>
           )}
-
-          {pedidoActual.length === 0 && carrito.length === 0 && (
-            <Text style={styles.emptyText}>
-              El pedido está vacío.
-            </Text>
-          )}
         </ScrollView>
       )}
 
       {vista === "carrito" && carrito.length > 0 && (
         <View style={styles.footer}>
+          <View style={styles.footerTotal}>
+            <Text style={styles.footerTotalLabel}>
+              Por agregar
+            </Text>
+            <Text style={styles.footerTotalValue}>
+              Bs. {totalCarrito.toFixed(2)}
+            </Text>
+          </View>
+
           <TouchableOpacity
             style={[
               styles.enviarBtn,
-              enviando && styles.btnDisabled,
+              !turnoActivo &&
+                styles.enviarBtnClosed,
+              (enviando || cargandoTurno) &&
+                styles.buttonDisabled,
             ]}
-            onPress={enviarPedido}
-            disabled={enviando}
+            onPress={
+              turnoActivo
+                ? enviarPedido
+                : mostrarTurnoCerrado
+            }
+            disabled={enviando || cargandoTurno}
           >
-            {enviando ? (
-              <ActivityIndicator color={palette.white} />
+            {enviando || cargandoTurno ? (
+              <ActivityIndicator
+                color={palette.white}
+              />
             ) : (
-              <Text style={styles.enviarBtnText}>
-                {ordenPendiente
-                  ? "Agregar al pedido"
-                  : "Enviar pedido"}
-              </Text>
+              <>
+                <Icon
+                  name={
+                    turnoActivo
+                      ? "send"
+                      : "lock"
+                  }
+                  size={17}
+                  color={palette.white}
+                />
+                <Text style={styles.enviarBtnText}>
+                  {!turnoActivo
+                    ? "Turno cerrado"
+                    : ordenPendiente
+                    ? "Agregar al pedido"
+                    : "Enviar pedido"}
+                </Text>
+              </>
             )}
           </TouchableOpacity>
         </View>
@@ -1219,6 +1918,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: palette.background,
+    paddingHorizontal: 14,
+    paddingTop: 12,
   },
 
   centered: {
@@ -1226,231 +1927,493 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: palette.background,
+    paddingHorizontal: 30,
   },
 
-  header: {
-    backgroundColor: palette.primary,
-    paddingTop: 48,
-    paddingBottom: 14,
-    paddingHorizontal: 14,
+  loadingLogo: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: palette.dark,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18,
+  },
+
+  loadingLogoText: {
+    color: palette.white,
+    fontSize: 27,
+    fontWeight: "900",
+  },
+
+  loadingTitle: {
+    color: palette.dark,
+    fontSize: 17,
+    fontWeight: "900",
+    marginTop: 15,
+  },
+
+  loadingSubtitle: {
+    color: palette.gray,
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: 5,
+  },
+
+  topBar: {
+    minHeight: 66,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    borderBottomWidth: 4,
-    borderBottomColor: palette.accent,
-    elevation: 4,
+    marginBottom: 11,
+    backgroundColor: palette.surface,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: palette.border,
+    elevation: 2,
+    shadowColor: "#16072F",
+    shadowOpacity: 0.08,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 4 },
   },
 
   backBtn: {
-    minHeight: 40,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 12,
+    width: 45,
+    height: 45,
+    borderRadius: 15,
     backgroundColor: palette.dark,
+    alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: palette.light,
-  },
-
-  backText: {
-    color: palette.white,
-    fontSize: 13,
-    fontWeight: "700",
   },
 
   headerCenter: {
     flex: 1,
-    alignItems: "center",
-    paddingHorizontal: 6,
+    marginLeft: 12,
   },
 
   headerTitle: {
-    color: palette.white,
-    fontSize: 20,
-    fontWeight: "800",
+    color: palette.dark,
+    fontSize: 19,
+    fontWeight: "900",
   },
 
-  pedidoBadge: {
-    color: palette.light,
-    fontSize: 11,
-    marginTop: 3,
-    fontWeight: "600",
+  headerSubtitle: {
+    color: palette.textSecondary,
+    fontSize: 10.5,
+    marginTop: 2,
   },
 
-  carritoBtn: {
-    backgroundColor: palette.accent,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: 20,
-    minWidth: 72,
+  refreshBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "#E3EFF3",
     alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: palette.light,
+    borderColor: "#D2E4EA",
   },
 
-  actualizarMenuBtn: {
-    backgroundColor: palette.light,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
+  shiftBanner: {
+    minHeight: 66,
+    flexDirection: "row",
+    alignItems: "center",
     borderRadius: 18,
-    marginHorizontal: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 11,
     borderWidth: 1,
-    borderColor: palette.white,
   },
 
-  actualizarMenuBtnDisabled: {
-    opacity: 0.6,
+  shiftBannerActive: {
+    backgroundColor: palette.successBackground,
+    borderColor: "#B7DFC9",
   },
 
-  actualizarMenuText: {
-    color: palette.primary,
-    fontSize: 11,
-    fontWeight: "800",
+  shiftBannerClosed: {
+    backgroundColor: palette.warningBackground,
+    borderColor: "#F2D4A4",
   },
 
-  carritoText: {
+  shiftIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+
+  shiftIconActive: {
+    backgroundColor: palette.white,
+  },
+
+  shiftIconClosed: {
+    backgroundColor: palette.white,
+  },
+
+  shiftTextBox: {
+    flex: 1,
+  },
+
+  shiftTitle: {
+    color: palette.dark,
+    fontSize: 13.5,
+    fontWeight: "900",
+  },
+
+  shiftDescription: {
+    color: palette.textSecondary,
+    fontSize: 10.5,
+    lineHeight: 15,
+    marginTop: 2,
+  },
+
+  goTablesBtn: {
+    marginLeft: 8,
+    minHeight: 34,
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: palette.primary,
+  },
+
+  goTablesText: {
     color: palette.white,
-    fontSize: 12,
-    fontWeight: "700",
+    fontSize: 9.5,
+    fontWeight: "900",
   },
 
-  list: {
-    padding: 16,
-    paddingBottom: 24,
-  },
-
-  categoriaCard: {
-    backgroundColor: palette.card,
-    borderRadius: 16,
-    padding: 18,
+  tabs: {
+    flexDirection: "row",
+    backgroundColor: palette.surface,
+    borderRadius: 17,
+    padding: 4,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: palette.border,
-    borderLeftWidth: 5,
-    borderLeftColor: palette.accent,
-    elevation: 2,
+  },
+
+  tab: {
+    flex: 1,
+    minHeight: 43,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+  },
+
+  tabActive: {
+    backgroundColor: palette.primary,
+  },
+
+  tabText: {
+    color: palette.primary,
+    fontSize: 12.5,
+    fontWeight: "900",
+    marginLeft: 7,
+  },
+
+  tabTextActive: {
+    color: palette.white,
+  },
+
+  tabCount: {
+    minWidth: 23,
+    height: 23,
+    borderRadius: 12,
+    backgroundColor: palette.muted,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 7,
+    paddingHorizontal: 6,
+  },
+
+  tabCountActive: {
+    backgroundColor: "rgba(255,255,255,0.20)",
+  },
+
+  tabCountText: {
+    color: palette.primary,
+    fontSize: 10,
+    fontWeight: "900",
+  },
+
+  tabCountTextActive: {
+    color: palette.white,
+  },
+
+  content: {
+    flex: 1,
+  },
+
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 2,
+    marginBottom: 9,
+  },
+
+  sectionTitle: {
+    color: palette.dark,
+    fontSize: 16,
+    fontWeight: "900",
+  },
+
+  sectionSubtitle: {
+    color: palette.textSecondary,
+    fontSize: 10.5,
+    marginTop: 2,
+  },
+
+  sectionBadge: {
+    minWidth: 27,
+    height: 27,
+    borderRadius: 14,
+    backgroundColor: palette.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 7,
+  },
+
+  sectionBadgeText: {
+    color: palette.white,
+    fontSize: 10,
+    fontWeight: "900",
+  },
+
+  list: {
+    paddingBottom: 28,
+  },
+
+  categoriaCard: {
+    minHeight: 82,
+    backgroundColor: palette.card,
+    borderRadius: 21,
+    paddingHorizontal: 13,
+    paddingVertical: 13,
+    marginBottom: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#C7DDE5",
+    elevation: 1,
+  },
+
+  categoryIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    backgroundColor: palette.white,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+
+  categoryTextBox: {
+    flex: 1,
   },
 
   categoriaNombre: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: palette.text,
+    fontSize: 15.5,
+    fontWeight: "900",
+    color: palette.dark,
   },
 
   categoriaHint: {
-    fontSize: 13,
-    color: palette.primary,
-    marginTop: 5,
-    fontWeight: "600",
+    fontSize: 10.5,
+    color: palette.textSecondary,
+    marginTop: 4,
   },
 
-  volverNivelBtn: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    backgroundColor: palette.muted,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
+  categoryArrow: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: palette.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  breadcrumbRow: {
+    minHeight: 43,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 11,
+  },
+
+  breadcrumbButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: palette.surface,
+    minHeight: 39,
+    paddingHorizontal: 11,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: palette.border,
   },
 
-  volverNivelText: {
+  breadcrumbText: {
     color: palette.primary,
+    fontSize: 11,
+    fontWeight: "900",
+    marginLeft: 6,
+  },
+
+  breadcrumbCurrent: {
+    flex: 1,
+    color: palette.dark,
+    fontSize: 11.5,
     fontWeight: "800",
+    marginLeft: 9,
   },
 
   productoCard: {
-    backgroundColor: palette.card,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 11,
+    minHeight: 90,
+    backgroundColor: palette.surface,
+    borderRadius: 18,
+    padding: 12,
+    marginBottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     borderWidth: 1,
     borderColor: palette.border,
     elevation: 1,
   },
 
-  productoInfo: {
-    flex: 1,
+  productIconBox: {
+    width: 43,
+    height: 43,
+    borderRadius: 14,
+    backgroundColor: "#E8F5F5",
+    alignItems: "center",
+    justifyContent: "center",
     marginRight: 10,
   },
 
+  productoInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+
   productoNombre: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: palette.text,
-  },
-
-  productoPrecio: {
-    fontSize: 15,
-    color: palette.accent,
-    marginTop: 5,
-    fontWeight: "800",
-  },
-
-  productoCategoria: {
-    fontSize: 13,
-    color: palette.textSecondary,
-    marginTop: 3,
+    fontSize: 14,
+    fontWeight: "900",
+    color: palette.dark,
   },
 
   productoSubcategoria: {
-    fontSize: 12,
+    fontSize: 10.5,
     color: palette.gray,
-    marginTop: 2,
+    marginTop: 3,
+  },
+
+  productoPrecio: {
+    fontSize: 14,
+    color: palette.primary,
+    marginTop: 5,
+    fontWeight: "900",
   },
 
   addBtn: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 11,
+    borderRadius: 12,
     backgroundColor: palette.primary,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 10,
   },
 
   addBtnText: {
     color: palette.white,
-    fontWeight: "700",
-    fontSize: 13,
+    fontWeight: "900",
+    fontSize: 10.5,
+    marginLeft: 4,
   },
 
   cantidadControl: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
   },
 
   ctrlBtn: {
-    backgroundColor: palette.muted,
-    width: 32,
-    height: 32,
-    borderRadius: 9,
+    width: 33,
+    height: 33,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: palette.muted,
     borderWidth: 1,
     borderColor: palette.border,
   },
 
-  ctrlBtnText: {
-    fontSize: 19,
-    color: palette.dark,
-    fontWeight: "bold",
+  ctrlBtnAdd: {
+    backgroundColor: palette.primary,
+    borderColor: palette.primary,
   },
 
   cantidadNum: {
-    fontSize: 16,
-    fontWeight: "800",
     color: palette.dark,
-    minWidth: 22,
+    fontSize: 14,
+    fontWeight: "900",
+    minWidth: 27,
     textAlign: "center",
   },
 
-  loadingPedidoBox: {
+  orderContent: {
+    paddingBottom: 120,
+  },
+
+  orderSummaryCard: {
+    minHeight: 70,
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: palette.card,
+    borderRadius: 20,
+    padding: 13,
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: "#C7DDE5",
+  },
+
+  orderSummaryIcon: {
+    width: 43,
+    height: 43,
     borderRadius: 14,
-    padding: 18,
+    backgroundColor: palette.white,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+
+  orderSummaryText: {
+    flex: 1,
+  },
+
+  orderSummaryTitle: {
+    color: palette.dark,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+
+  orderSummarySubtitle: {
+    color: palette.textSecondary,
+    fontSize: 10.5,
+    marginTop: 3,
+  },
+
+  orderSummaryTotal: {
+    color: palette.primary,
+    fontSize: 17,
+    fontWeight: "900",
+  },
+
+  loadingPedidoBox: {
+    backgroundColor: palette.surface,
+    borderRadius: 17,
+    padding: 19,
     alignItems: "center",
     borderWidth: 1,
     borderColor: palette.border,
@@ -1459,139 +2422,230 @@ const styles = StyleSheet.create({
   loadingPedidoText: {
     marginTop: 8,
     color: palette.gray,
+    fontSize: 11.5,
   },
 
-  pedidoActualBox: {
-    backgroundColor: palette.muted,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: palette.light,
-    padding: 15,
-    marginBottom: 16,
-  },
-
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: "800",
-    color: palette.text,
-    marginBottom: 4,
-  },
-
-  sectionSubtitle: {
-    fontSize: 12,
-    color: palette.accent,
+  orderSection: {
+    backgroundColor: palette.surface,
+    borderRadius: 20,
+    padding: 13,
     marginBottom: 12,
-    fontWeight: "700",
+    borderWidth: 1,
+    borderColor: palette.border,
   },
 
-  pedidoActualItem: {
+  orderSectionHeader: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.border,
+    justifyContent: "space-between",
+    marginBottom: 10,
   },
 
-  pedidoActualNombre: {
-    color: palette.text,
-    fontSize: 15,
-    fontWeight: "700",
+  registeredBadge: {
+    minWidth: 27,
+    height: 27,
+    borderRadius: 14,
+    backgroundColor: palette.successBackground,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 7,
+    borderWidth: 1,
+    borderColor: "#B7DFC9",
   },
 
-  pedidoActualCantidad: {
+  registeredBadgeText: {
+    color: palette.success,
+    fontSize: 10,
+    fontWeight: "900",
+  },
+
+  newItemsBadge: {
+    minWidth: 27,
+    height: 27,
+    borderRadius: 14,
+    backgroundColor: palette.warningBackground,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 7,
+    borderWidth: 1,
+    borderColor: "#F2D4A4",
+  },
+
+  newItemsBadgeText: {
+    color: palette.warning,
+    fontSize: 10,
+    fontWeight: "900",
+  },
+
+  registeredItem: {
+    minHeight: 56,
+    flexDirection: "row",
+    alignItems: "center",
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+    paddingVertical: 9,
+  },
+
+  smallProductIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: palette.muted,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 9,
+  },
+
+  registeredItemInfo: {
+    flex: 1,
+  },
+
+  itemName: {
+    color: palette.dark,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  itemMeta: {
     color: palette.gray,
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 10.5,
+    marginTop: 3,
   },
 
-  pedidoActualPrecio: {
-    color: palette.accent,
-    fontWeight: "800",
-    fontSize: 14,
+  itemPrice: {
+    color: palette.primary,
+    fontSize: 12.5,
+    fontWeight: "900",
   },
 
-  pedidoActualTotalRow: {
+  subtotalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 13,
+    alignItems: "center",
+    paddingTop: 11,
+    marginTop: 2,
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
   },
 
-  pedidoActualTotalLabel: {
+  subtotalLabel: {
+    color: palette.textSecondary,
+    fontSize: 12,
+    fontWeight: "800",
+  },
+
+  subtotalValue: {
     color: palette.primary,
     fontSize: 15,
-    fontWeight: "800",
+    fontWeight: "900",
   },
 
-  pedidoActualTotalValue: {
-    color: palette.accent,
-    fontSize: 17,
-    fontWeight: "800",
-  },
-
-  sinPedidoBox: {
-    backgroundColor: palette.card,
-    borderRadius: 14,
-    padding: 17,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-
-  sinPedidoText: {
-    color: palette.gray,
-    textAlign: "center",
-  },
-
-  carritoItem: {
-    backgroundColor: palette.card,
-    borderRadius: 14,
-    padding: 15,
-    marginBottom: 11,
-    elevation: 1,
-    borderWidth: 1,
-    borderColor: palette.border,
-    borderLeftWidth: 4,
-    borderLeftColor: palette.primary,
-  },
-
-  carritoItemTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  noOrderBox: {
     alignItems: "center",
-    marginBottom: 5,
+    backgroundColor: palette.surface,
+    borderRadius: 20,
+    paddingVertical: 22,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: palette.border,
   },
 
-  carritoNombre: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: palette.text,
-    flex: 1,
-    marginRight: 10,
-  },
-
-  carritoSubtotal: {
+  noOrderTitle: {
+    color: palette.dark,
     fontSize: 14,
-    color: palette.accent,
+    fontWeight: "900",
+    marginTop: 8,
+  },
+
+  noOrderText: {
+    color: palette.gray,
+    fontSize: 11.5,
+    lineHeight: 17,
+    textAlign: "center",
+    marginTop: 4,
+  },
+
+  cartItem: {
+    backgroundColor: palette.card,
+    borderRadius: 17,
+    padding: 12,
     marginBottom: 9,
-    fontWeight: "700",
+    borderWidth: 1.5,
+    borderColor: "#C7DDE5",
+  },
+
+  cartItemTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  cartItemHeading: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 8,
+  },
+
+  cartItemText: {
+    flex: 1,
+  },
+
+  noteInputWrapper: {
+    minHeight: 43,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: palette.white,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: palette.border,
   },
 
   notaInput: {
+    flex: 1,
+    color: palette.text,
+    fontSize: 11.5,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+  },
+
+  addProductsPrompt: {
+    minHeight: 67,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: palette.surface,
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
+  },
+
+  addProductsPromptText: {
+    flex: 1,
+    marginLeft: 10,
+  },
+
+  addProductsPromptTitle: {
+    color: palette.dark,
     fontSize: 13,
-    color: palette.text,
-    backgroundColor: palette.background,
+    fontWeight: "900",
+  },
+
+  addProductsPromptSubtitle: {
+    color: palette.gray,
+    fontSize: 10.5,
+    marginTop: 2,
   },
 
   totalBox: {
-    backgroundColor: palette.card,
-    borderRadius: 15,
-    padding: 16,
-    marginTop: 8,
+    backgroundColor: palette.surface,
+    borderRadius: 20,
+    padding: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: palette.border,
   },
@@ -1599,72 +2653,120 @@ const styles = StyleSheet.create({
   totalLine: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 8,
+    marginBottom: 9,
   },
 
   totalLabel: {
-    fontSize: 14,
+    fontSize: 11.5,
     color: palette.textSecondary,
   },
 
   totalValue: {
-    fontSize: 14,
-    color: palette.text,
-    fontWeight: "800",
+    fontSize: 11.5,
+    color: palette.dark,
+    fontWeight: "900",
   },
 
   totalGeneralLine: {
     flexDirection: "row",
     justifyContent: "space-between",
-    borderTopWidth: 1,
-    borderTopColor: palette.border,
-    paddingTop: 13,
-    marginTop: 4,
+    alignItems: "center",
+    backgroundColor: palette.dark,
+    borderRadius: 15,
+    padding: 13,
+    marginTop: 5,
   },
 
   totalGeneralLabel: {
-    fontSize: 16,
-    color: palette.primary,
-    fontWeight: "800",
+    color: palette.light,
+    fontSize: 8.5,
+    fontWeight: "900",
+    letterSpacing: 0.5,
+  },
+
+  totalCaption: {
+    color: "#D9D0E8",
+    fontSize: 9.5,
+    marginTop: 3,
   },
 
   totalGeneralValue: {
-    fontSize: 19,
-    color: palette.accent,
-    fontWeight: "800",
+    color: palette.white,
+    fontSize: 18,
+    fontWeight: "900",
   },
 
   footer: {
-    padding: 16,
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 0,
+    minHeight: 78,
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: palette.surface,
-    borderTopWidth: 1,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderBottomWidth: 0,
     borderColor: palette.border,
+    elevation: 10,
+  },
+
+  footerTotal: {
+    minWidth: 88,
+    marginRight: 10,
+  },
+
+  footerTotalLabel: {
+    color: palette.gray,
+    fontSize: 9.5,
+    fontWeight: "700",
+  },
+
+  footerTotalValue: {
+    color: palette.primary,
+    fontSize: 15,
+    fontWeight: "900",
+    marginTop: 2,
   },
 
   enviarBtn: {
-    backgroundColor: palette.accent,
+    flex: 1,
+    minHeight: 50,
     borderRadius: 14,
-    paddingVertical: 16,
+    backgroundColor: palette.primary,
+    flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: palette.light,
-    elevation: 2,
+    justifyContent: "center",
   },
 
-  btnDisabled: {
-    opacity: 0.6,
+  enviarBtnClosed: {
+    backgroundColor: palette.warning,
   },
 
   enviarBtnText: {
     color: palette.white,
-    fontSize: 16,
-    fontWeight: "800",
+    fontSize: 12.5,
+    fontWeight: "900",
+    marginLeft: 7,
   },
 
-  emptyText: {
-    textAlign: "center",
-    color: palette.gray,
-    marginTop: 40,
-    fontSize: 15,
+  buttonDisabled: {
+    opacity: 0.62,
+  },
+
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 45,
+  },
+
+  emptyTitle: {
+    color: palette.dark,
+    fontSize: 14,
+    fontWeight: "900",
+    marginTop: 8,
   },
 });
