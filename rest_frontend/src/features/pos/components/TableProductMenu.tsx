@@ -1,5 +1,5 @@
 import { DialogTitle } from "@/components/ui/dialog"
-import { ArrowLeft, ShoppingCart, Plus, Minus, Trash2, Tag, Utensils, Edit, ShoppingBag } from "lucide-react"
+import { ArrowLeft, ShoppingCart, Plus, Minus, Trash2, Tag, Utensils, Edit, ShoppingBag, MessageSquare, Utensils as MesaIcon } from "lucide-react"
 import { LoadingButton } from "@/shared/components/LoadingButton"
 import { Dispatch, SetStateAction } from "react"
 import { useTableProductMenu, Product } from "../hooks/useTableProductMenu"
@@ -13,6 +13,8 @@ interface TableProductMenuProps {
   handleAction: (actionName: string) => void
   isLoading: boolean
   actionLoading: string | null
+  orderNote: string
+  setOrderNote: (note: string) => void
 }
 
 export function TableProductMenu({
@@ -21,7 +23,9 @@ export function TableProductMenu({
   setViewMode,
   handleAction,
   isLoading,
-  actionLoading
+  actionLoading,
+  orderNote,
+  setOrderNote,
 }: TableProductMenuProps) {
   
   const {
@@ -153,6 +157,54 @@ export function TableProductMenu({
             <div className="bg-restaurante-primario/10 text-restaurante-primario px-3 py-1 rounded-full text-sm font-bold">
               {selectedProducts.length} items
             </div>
+          </div>
+
+          {/* Panel de Nota / Descripción del Pedido */}
+          <div className="px-4 pt-3 pb-2 border-b border-gray-100 shrink-0">
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+              <MessageSquare size={10} />
+              Descripción del pedido
+            </p>
+            {/* Botones rápidos */}
+            <div className="flex gap-2 mb-2">
+              <button
+                onClick={() => setOrderNote(orderNote === "Mesa" ? "" : "Mesa")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                  orderNote === "Mesa"
+                    ? "bg-restaurante-primario text-white border-restaurante-primario shadow-sm"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-restaurante-primario/40 hover:text-restaurante-primario"
+                }`}
+              >
+                <MesaIcon size={12} /> Mesa
+              </button>
+              <button
+                onClick={() => setOrderNote(orderNote === "Para Llevar" ? "" : "Para Llevar")}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                  orderNote === "Para Llevar"
+                    ? "bg-orange-500 text-white border-orange-500 shadow-sm"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-orange-400 hover:text-orange-500"
+                }`}
+              >
+                <ShoppingBag size={12} /> Para Llevar
+              </button>
+            </div>
+            {/* Campo de texto libre — desactivado si hay botón rápido seleccionado */}
+            <textarea
+              value={orderNote === "Mesa" || orderNote === "Para Llevar" ? "" : orderNote}
+              onChange={(e) => setOrderNote(e.target.value)}
+              disabled={orderNote === "Mesa" || orderNote === "Para Llevar"}
+              placeholder={
+                orderNote === "Mesa" ? "✓ Mesa seleccionada" :
+                orderNote === "Para Llevar" ? "✓ Para Llevar seleccionado" :
+                "Nota libre: sin cebolla, extra salsa..."
+              }
+              rows={2}
+              className={`w-full text-xs rounded-xl border px-3 py-2 resize-none focus:outline-none transition-all text-gray-700 ${
+                orderNote === "Mesa" || orderNote === "Para Llevar"
+                  ? "bg-gray-100 border-gray-100 text-gray-400 cursor-not-allowed placeholder:text-gray-400 placeholder:font-semibold"
+                  : "bg-gray-50 border-gray-200 focus:border-restaurante-primario/50 focus:bg-white placeholder:text-gray-300"
+              }`}
+            />
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-hide">

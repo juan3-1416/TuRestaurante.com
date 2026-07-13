@@ -129,20 +129,32 @@ export function useCaja() {
     await new Promise(resolve => setTimeout(resolve, 1000))
 
     try {
-      const orderId = selectedTableForPayment.activeOrderId;
+      // Opción A: Pagar TODAS las órdenes activas de la mesa en una sola confirmación.
+      // Usamos activeOrderIds si está disponible, con fallback a activeOrderId (1 sola orden).
+      const orderIds: (number | string)[] = 
+        selectedTableForPayment.activeOrderIds && selectedTableForPayment.activeOrderIds.length > 0
+          ? selectedTableForPayment.activeOrderIds
+          : selectedTableForPayment.activeOrderId
+            ? [selectedTableForPayment.activeOrderId]
+            : [];
 
-      if (!orderId) {
+      if (orderIds.length === 0) {
         alert("No se encontró una orden activa para esta mesa. Verifica que se hayan enviado productos a cocina.");
         setIsProcessingPayment(false);
         return;
       }
 
-      await apiClient.post(`/orders/orders/${orderId}/pay/`, {
-        payment_method: paymentMethod,
-        currency: paymentCurrency === "USD" ? "USD" : "BOB",
-        exchange_rate: exchangeRate,
-        amount_foreign: paymentCurrency === "USD" ? (Number(amountReceived) || null) : null,
-      });
+      // Pagar cada orden activa de la mesa
+      await Promise.all(
+        orderIds.map(orderId =>
+          apiClient.post(`/orders/orders/${orderId}/pay/`, {
+            payment_method: paymentMethod,
+            currency: paymentCurrency === "USD" ? "USD" : "BOB",
+            exchange_rate: exchangeRate,
+            amount_foreign: paymentCurrency === "USD" ? (Number(amountReceived) || null) : null,
+          })
+        )
+      );
 
       await apiClient.patch(`/tables/${selectedTableForPayment.id}/update_status/`, {
         status: "Libre"
