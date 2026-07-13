@@ -19,6 +19,7 @@ export function useTables() {
       return fetchedTables.map((t) => ({
         ...t,
         activeOrderId: t.activeOrderId ?? null,
+        activeOrderIds: (t as { activeOrderIds?: (number | string)[] }).activeOrderIds ?? [],
         observationNote: (t as { observationNote?: string }).observationNote ?? null,
         currentTotal: t.currentTotal !== undefined 
           ? t.currentTotal 
@@ -71,18 +72,24 @@ export function useTables() {
       customerName,
       orders,
       activeTime,
+      orderId,
+      note,
     }: {
       id: string | number;
       status: TableStatus;
       customerName?: string;
       orders?: OrderItem[];
       activeTime?: string;
+      orderId?: number | string;  // Si viene, edita esa orden específica del backend
+      note?: string;              // Descripción del pedido
     }) => {
       const response = await apiClient.patch(`/tables/${id}/update_status/`, {
         status,
         customerName,
         orders,
         activeTime,
+        ...(orderId !== undefined ? { order_id: orderId } : {}),
+        ...(note !== undefined ? { note } : {}),
       });
       return response.data;
     },
@@ -94,26 +101,80 @@ export function useTables() {
       queryClient.setQueryData<Table[]>(["tables"], (oldTables) => {
         if (!oldTables) return oldTables;
 
-        // El backend devuelve { status: "...", table: { currentTotal, activeOrderId, ... } }
+        // El backend devuelve { status: "...", table: { currentTotal, activeOrderId, activeOrderIds, ... } }
         const backendTable = responseData?.table;
 
         return oldTables.map((t: Table) => {
           if (String(t.id) === String(variables.id)) {
+            let updatedOrders: OrderItem[] | undefined;
+
+            if (variables.orderId !== undefined && variables.orders !== undefined) {
+              // Edición de un ticket específico del backend:
+              // Reemplazar solo los ítems de ese orderId, mantener el resto
+              const otherItems = (t.orders || []).filter(
+                o => String(o.orderId) !== String(variables.orderId)
+              );
+              const newItems = variables.orders.map(o => ({
+                ...o,
+                orderId: variables.orderId !== undefined ? String(variables.orderId) : o.orderId,
+              }));
+              updatedOrders = [...otherItems, ...newItems];
+            } else {
+              // Comportamiento normal: reemplazar todos los orders o preservar los locales
+              updatedOrders = variables.orders !== undefined ? variables.orders : t.orders;
+            }
+
             return {
               ...t,
               status: variables.status,
               customerName: variables.customerName ?? t.customerName,
               activeTime: variables.activeTime ?? t.activeTime,
-              // Usamos los orders LOCALES (con orderId intacto) en lugar de los del backend
-              orders: variables.orders !== undefined ? variables.orders : t.orders,
+              orders: updatedOrders,
               // Los totales e IDs reales los calculó el backend correctamente
               currentTotal: backendTable?.currentTotal ?? t.currentTotal,
               activeOrderId: backendTable?.activeOrderId ?? t.activeOrderId,
+              activeOrderIds: backendTable?.activeOrderIds ?? t.activeOrderIds,
             };
           }
           return t;
         });
       });
+    },
+  });
+
+  // Mutación para AGREGAR UN NUEVO PEDIDO independiente a la mesa.
+  // Llama a update_status con new_order=true para que el backend cree una Order nueva.
+  const addNewOrder = useMutation({
+    mutationFn: async ({
+      id,
+      status,
+      customerName,
+      orders,
+      activeTime,
+      note,
+    }: {
+      id: string | number;
+      status: TableStatus;
+      customerName?: string;
+      orders: OrderItem[];  // Solo los ítems del NUEVO pedido
+      activeTime?: string;
+      note?: string;        // Descripción del pedido
+    }) => {
+      const response = await apiClient.patch(`/tables/${id}/update_status/`, {
+        status,
+        customerName,
+        orders,
+        activeTime,
+        new_order: true,  // Le dice al backend que cree una Order nueva
+        ...(note !== undefined ? { note } : {}),
+      });
+      return response.data;
+    },
+    // Después de crear la nueva orden, hacemos refetch completo desde el backend.
+    // El backend ya tiene los orderId reales de todas las órdenes, así podemos
+    // reemplazar el caché con datos frescos que incluyen los nuevos orderId numéricos.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tables"] });
     },
   });
 
@@ -146,6 +207,7 @@ export function useTables() {
     editTable,
     deleteTable,
     updateTableStatus,
+    addNewOrder,
     reportWalkout,
     resolveWalkout,
   };
