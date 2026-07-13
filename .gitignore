@@ -35,3 +35,6 @@ next-env.d.ts
 # python cache
 __pycache__
 *.pyc
+
+# Android
+MobileApp/android/.gradle/
