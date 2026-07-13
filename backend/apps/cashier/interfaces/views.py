@@ -9,6 +9,7 @@ import requests
 from django.core.cache import cache
 from apps.cashier.infrastructure.models import CashShift, Transaction, TransactionType, PaymentMethod
 from apps.cashier.interfaces.serializers import CashShiftSerializer, TransactionSerializer
+from core.websocket import broadcast_global_action
 
 class CashierViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated]
@@ -27,6 +28,7 @@ class CashierViewSet(viewsets.ViewSet):
             user=user,
             initial_balance=initial_balance
         )
+        broadcast_global_action('shift_updated')
         serializer = CashShiftSerializer(shift)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -48,6 +50,7 @@ class CashierViewSet(viewsets.ViewSet):
             shift.is_open = False
             shift.save()
             
+        broadcast_global_action('shift_updated')
         serializer = CashShiftSerializer(shift)
         return Response(serializer.data, status=status.HTTP_200_OK)
 

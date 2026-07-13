@@ -27,3 +27,9 @@ class TableConsumer(AsyncWebsocketConsumer):
             'action': 'table_updated',
             'table_id': event.get('table_id')
         }))
+
+    async def broadcast_action(self, event):
+        # Send a generic action to WebSocket
+        await self.send(text_data=json.dumps({
+            'action': event.get('action_name')
+        }))
