@@ -14,14 +14,15 @@ import Icon from "react-native-vector-icons/Feather";
 import { colors } from "../theme/colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
+import { useTableWebSocket } from "../services/useTableWebSocket";
 
-const API_URL = "http://192.168.0.10:8000/api/tables/";
-const USERS_URL = "http://192.168.0.10:8000/api/users/";
-const SHIFTS_URL = "http://192.168.0.10:8000/api/users/shifts/";
-const SHIFT_START_URL =
-  "http://192.168.0.10:8000/api/users/shifts/start/";
-const SHIFT_END_URL =
-  "http://192.168.0.10:8000/api/users/shifts/end/";
+import { API_BASE_URL } from "../services/config";
+
+const API_URL = `${API_BASE_URL}/api/tables/`;
+const USERS_URL = `${API_BASE_URL}/api/users/`;
+const SHIFTS_URL = `${API_BASE_URL}/api/users/shifts/`;
+const SHIFT_START_URL = `${API_BASE_URL}/api/users/shifts/start/`;
+const SHIFT_END_URL = `${API_BASE_URL}/api/users/shifts/end/`;
 
 const palette = {
   light: colors.restaurantLight ?? "#78B9B5",
@@ -79,9 +80,16 @@ export default function MesasScreen({ navigation }) {
   const [turnoActual, setTurnoActual] = useState(null);
   const [cargandoTurno, setCargandoTurno] = useState(true);
   const [procesandoTurno, setProcesandoTurno] = useState(false);
-  const [modalCerrarTurnoVisible, setModalCerrarTurnoVisible] =
-    useState(false);
+  const [modalCerrarTurnoVisible, setModalCerrarTurnoVisible] = useState(false);
   const [observacionesTurno, setObservacionesTurno] = useState("");
+
+  // WebSocket Integration
+  const onWebSocketUpdate = useCallback(() => {
+    console.log("[MesasScreen] Ping recibido. Recargando mesas...");
+    refrescarPantalla();
+  }, []);
+  
+  useTableWebSocket(onWebSocketUpdate);
 
   const getTableNumber = (mesa) => {
     return mesa?.table_number ?? mesa?.number ?? "";

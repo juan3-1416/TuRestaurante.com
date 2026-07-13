@@ -14,8 +14,9 @@ import Icon from "react-native-vector-icons/Feather";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { colors } from "../theme/colors";
+import { useTableWebSocket } from "../services/useTableWebSocket";
 
-const API_BASE_URL = "http://192.168.0.10:8000";
+import { API_BASE_URL } from "../services/config";
 const ORDERS_URL = `${API_BASE_URL}/api/orders/orders/`;
 const PRODUCTS_URL = `${API_BASE_URL}/api/inventory/products/`;
 const ORDER_OWNERS_STORAGE_KEY = "orderOwnersById";
@@ -67,10 +68,17 @@ export default function PedidosPendientesScreen({
   const [ordenes, setOrdenes] = useState([]);
   const [productos, setProductos] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const [menuVisible, setMenuVisible] = useState(false);
   const [userName, setUserName] = useState("Usuario");
   const [userEmail, setUserEmail] = useState("Sesión activa");
+
+  // WebSocket Integration
+  const onWebSocketUpdate = useCallback(() => {
+    console.log("[PedidosPendientes] Ping recibido. Recargando pedidos...");
+    cargarPedidosPendientes();
+  }, []);
+  
+  useTableWebSocket(onWebSocketUpdate);
 
   const [detalleVisible, setDetalleVisible] = useState(false);
   const [ordenSeleccionada, setOrdenSeleccionada] =

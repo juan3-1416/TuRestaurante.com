@@ -15,7 +15,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { colors } from "../theme/colors";
 
-const API_BASE_URL = "http://192.168.0.10:8000";
+import { API_BASE_URL } from "../services/config";
 const ORDERS_URL = `${API_BASE_URL}/api/orders/orders/`;
 const PRODUCTS_URL = `${API_BASE_URL}/api/inventory/products/`;
 const USERS_URL = `${API_BASE_URL}/api/users/`;
