@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 
 // 1. Definición de Tipos
-export type TableStatus = "Libre" | "Ocupada" | "Reservada"
+export type TableStatus = "Libre" | "Ocupada" | "Reservada" | "Observada"
 
 export interface OrderItem {
   cartId: string;
@@ -10,6 +10,7 @@ export interface OrderItem {
   id?: number | string; // Backend expects 'id' as product id
   name: string;
   price: number;
+  isTakeaway?: boolean; // Para llevar
 }
 
 export interface Table {
@@ -22,6 +23,8 @@ export interface Table {
   customerName?: string
   orders?: OrderItem[]
   activeOrderId?: number | string | null // ID real de la orden en el backend
+  observationNote?: string | null        // Nota de fuga (walkout)
+  waiter?: string | null                 // Nombre del mesero que atendió
 }
 
 export interface Transaction {

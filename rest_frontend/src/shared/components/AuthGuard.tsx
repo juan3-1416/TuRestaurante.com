@@ -10,6 +10,8 @@ const ROLE_ROUTES: Record<string, Role[]> = {
   "/dashboard": ["ADMIN"],
   "/pos": ["ADMIN", "CASHIER", "WAITER"],
   "/perfil": ["ADMIN", "CASHIER", "WAITER"],
+  "/reportes": ["ADMIN"],
+  "/turnos": ["ADMIN", "CASHIER", "WAITER"],
 };
 
 const DEFAULT_ROUTE_BY_ROLE: Record<Role, string> = {

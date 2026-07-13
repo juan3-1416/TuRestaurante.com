@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Users, Filter, CheckCircle2, Receipt, CalendarClock, Play } from "lucide-react"
+import { Users, Filter, CheckCircle2, Receipt, CalendarClock, Play, AlertTriangle } from "lucide-react"
 import { TableStatus } from "@/store/posStore"
 import { useTables } from "../hooks/useTables"
 import { TableDetailModal } from "./TableDetailModal"
@@ -45,6 +45,14 @@ export function TableMap() {
           indicator: "bg-yellow-500",
           icon: CalendarClock
         }
+      case "Observada":
+        return {
+          bg: "bg-orange-50/80",
+          border: "border-orange-400/60",
+          accent: "text-orange-600",
+          indicator: "bg-orange-500",
+          icon: AlertTriangle
+        }
     }
   }
 
@@ -68,7 +76,7 @@ export function TableMap() {
 
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-            {(["Todas", "Libre", "Ocupada", "Reservada"] as const).map((status) => (
+            {(["Todas", "Libre", "Ocupada", "Reservada", "Observada"] as const).map((status) => (
               <button
                 key={status}
                 onClick={() => setActiveFilter(status)}
@@ -122,7 +130,14 @@ export function TableMap() {
                 </div>
 
                 <div className="min-h-[60px] flex flex-col justify-center">
-                  {table.customerName ? (
+                  {table.status === "Observada" ? (
+                    <div className="bg-orange-50 p-3 rounded-2xl border border-orange-100 space-y-1">
+                      <p className="text-[10px] font-bold text-orange-500 uppercase">⚠️ Fuga Reportada</p>
+                      <p className="text-xs font-semibold text-orange-700 truncate">
+                        {table.observationNote || "Pendiente de resolución en caja"}
+                      </p>
+                    </div>
+                  ) : table.customerName ? (
                     <div className="bg-white/40 p-3 rounded-2xl border border-white/60 space-y-1">
                       <p className="text-[10px] font-bold text-gray-400 uppercase">Cliente / Referencia</p>
                       <p className="text-sm font-bold text-restaurante-oscuro truncate">{table.customerName}</p>

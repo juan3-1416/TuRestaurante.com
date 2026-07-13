@@ -88,6 +88,29 @@ class TransactionViewSet(viewsets.ModelViewSet):
         serializer = TransactionSerializer(tx)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
+    @action(detail=False, methods=['post'])
+    def income(self, request):
+        shift = CashShift.objects.filter(is_open=True).first()
+        if not shift:
+            return Response({'error': 'No hay un turno de caja abierto para registrar ingresos.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        amount = request.data.get('amount')
+        description = request.data.get('description')
+        
+        if not amount or not description:
+            return Response({'error': 'Se requiere amount y description.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        tx = Transaction.objects.create(
+            shift=shift,
+            transaction_type=TransactionType.INCOME,
+            description=description,
+            amount=amount,
+            payment_method=PaymentMethod.CASH # Se asume en efectivo
+        )
+        
+        serializer = TransactionSerializer(tx)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
 class ExchangeRateView(APIView):
     """
     Endpoint para obtener la tasa de cambio USD → BOB.

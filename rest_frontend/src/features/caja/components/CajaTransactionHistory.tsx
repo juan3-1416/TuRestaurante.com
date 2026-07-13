@@ -48,7 +48,18 @@ export function CajaTransactionHistory({ isShiftOpen, transactions }: CajaTransa
                   <td className="px-4 py-4 text-sm font-semibold text-gray-500">
                     {new Date(tx.created_at).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}
                   </td>
-                  <td className="px-4 py-4 text-sm font-bold text-restaurante-oscuro">{tx.description}</td>
+                  <td className="px-4 py-4">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-restaurante-oscuro">
+                        {tx.description.split(' (')[0]}
+                      </span>
+                      {tx.description.includes('(') && (
+                        <span className="text-xs text-orange-600 font-medium italic mt-0.5">
+                          {tx.description.substring(tx.description.indexOf('(') + 1, tx.description.lastIndexOf(')')) || tx.description.split(' (')[1]?.replace(')', '')}
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-4 text-sm">
                     <span className={`px-2.5 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider ${
                       tx.payment_method === 'Efectivo' ? 'bg-green-100 text-green-700' :
