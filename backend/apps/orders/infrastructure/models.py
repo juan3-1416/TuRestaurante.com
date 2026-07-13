@@ -22,6 +22,7 @@ class Order(models.Model):
     )
     total = models.DecimalField(max_digits=10, decimal_places=2, default=0.0)
     observation_note = models.TextField(blank=True, null=True)
+    note = models.CharField(max_length=500, blank=True, default="")  # Descripción del pedido (Mesa, Para Llevar, etc.)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

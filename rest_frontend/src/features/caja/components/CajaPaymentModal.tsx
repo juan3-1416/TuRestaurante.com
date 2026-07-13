@@ -72,44 +72,83 @@ export function CajaPaymentModal({
             </div>
           )}
 
-          {/* Detalle del Pedido (colapsable) */}
-          {orders.length > 0 && (
-            <div className="bg-gray-50/80 rounded-2xl border border-gray-100 overflow-hidden">
-              <button
-                onClick={() => setShowOrderDetail(!showOrderDetail)}
-                className="w-full flex items-center justify-between p-4 hover:bg-gray-100/50 transition-colors"
-              >
-                <span className="flex items-center gap-2 text-sm font-bold text-gray-600">
-                  <Receipt size={16} className="text-restaurante-primario" />
-                  Detalle del Pedido ({orders.length} ítem{orders.length !== 1 ? 's' : ''})
-                </span>
-                {showOrderDetail ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-              </button>
+          {/* Detalle del Pedido (colapsable) — agrupado por ticket */}
+          {orders.length > 0 && (() => {
+            // Agrupar ítems por orderId (igual que en TableStatusDetail)
+            const grouped = orders.reduce((acc, item) => {
+              const key = String(item.orderId || "Orden 1");
+              if (!acc[key]) acc[key] = { id: key, items: [] as typeof orders, total: 0 };
+              acc[key].items.push(item);
+              acc[key].total += Number(item.price) || 0;
+              return acc;
+            }, {} as Record<string, { id: string; items: typeof orders; total: number }>);
+            const tickets = Object.values(grouped);
 
-              {showOrderDetail && (
-                <div className="px-4 pb-4 space-y-2 max-h-48 overflow-y-auto">
-                  {orders.map((item, idx) => (
-                    <div key={`${item.cartId}-${idx}`} className="flex items-center justify-between text-sm py-1.5 border-b border-gray-100 last:border-0">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 bg-restaurante-primario/10 text-restaurante-primario rounded-md flex items-center justify-center text-[10px] font-black">1</span>
-                        <span className="font-medium text-gray-700">{item.name}</span>
-                        {item.isTakeaway && (
-                          <span className="text-[9px] font-bold bg-orange-100 text-orange-500 px-1.5 py-0.5 rounded">
-                            <ShoppingBag size={9} className="inline" /> Llevar
+            return (
+              <div className="bg-gray-50/80 rounded-2xl border border-gray-100 overflow-hidden">
+                <button
+                  onClick={() => setShowOrderDetail(!showOrderDetail)}
+                  className="w-full flex items-center justify-between p-4 hover:bg-gray-100/50 transition-colors"
+                >
+                  <span className="flex items-center gap-2 text-sm font-bold text-gray-600">
+                    <Receipt size={16} className="text-restaurante-primario" />
+                    Detalle del Pedido ({tickets.length} ticket{tickets.length !== 1 ? 's' : ''}, {orders.length} ítem{orders.length !== 1 ? 's' : ''})
+                  </span>
+                  {showOrderDetail ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                </button>
+
+                {showOrderDetail && (
+                  <div className="px-4 pb-4 space-y-3 max-h-56 overflow-y-auto">
+                    {tickets.map((ticket, ticketIdx) => (
+                      <div key={ticket.id} className="space-y-1">
+                        {/* Encabezado del ticket */}
+                        <div className="flex items-center gap-2 pt-1 flex-wrap">
+                          <span className="text-[10px] font-black text-restaurante-primario uppercase tracking-widest">
+                            Ticket {ticketIdx + 1}
                           </span>
-                        )}
+                          {/* Nota del ticket */}
+                          {ticket.items[0]?.orderNote && (
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
+                              ticket.items[0].orderNote === "Para Llevar"
+                                ? "bg-orange-100 text-orange-600"
+                                : ticket.items[0].orderNote === "Mesa"
+                                  ? "bg-restaurante-primario/10 text-restaurante-primario"
+                                  : "bg-gray-100 text-gray-500"
+                            }`}>
+                              {ticket.items[0].orderNote}
+                            </span>
+                          )}
+                          <div className="flex-1 h-px bg-restaurante-primario/20" />
+                          <span className="text-[10px] font-bold text-restaurante-primario/60 font-mono">
+                            Bs. {ticket.total.toFixed(2)}
+                          </span>
+                        </div>
+                        {/* Ítems del ticket */}
+                        {ticket.items.map((item, idx) => (
+                          <div key={`${item.cartId}-${idx}`} className="flex items-center justify-between text-sm py-1 border-b border-gray-100 last:border-0 pl-2">
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 bg-restaurante-primario/10 text-restaurante-primario rounded-md flex items-center justify-center text-[10px] font-black">1</span>
+                              <span className="font-medium text-gray-700">{item.name}</span>
+                              {item.isTakeaway && (
+                                <span className="text-[9px] font-bold bg-orange-100 text-orange-500 px-1.5 py-0.5 rounded">
+                                  <ShoppingBag size={9} className="inline" /> Llevar
+                                </span>
+                              )}
+                            </div>
+                            <span className="font-mono font-bold text-gray-600">Bs. {Number(item.price).toFixed(2)}</span>
+                          </div>
+                        ))}
                       </div>
-                      <span className="font-mono font-bold text-gray-600">Bs. {Number(item.price).toFixed(2)}</span>
+                    ))}
+                    <div className="flex justify-between items-center pt-2 border-t border-dashed border-gray-200">
+                      <span className="text-xs font-black text-gray-400 uppercase tracking-wide">Total</span>
+                      <span className="font-black text-restaurante-primario">Bs. {tableTotalBs.toFixed(2)}</span>
                     </div>
-                  ))}
-                  <div className="flex justify-between items-center pt-2 border-t border-dashed border-gray-200">
-                    <span className="text-xs font-black text-gray-400 uppercase tracking-wide">Total</span>
-                    <span className="font-black text-restaurante-primario">Bs. {tableTotalBs.toFixed(2)}</span>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            );
+          })()}
 
           </div>
 

@@ -70,6 +70,9 @@ class TableViewSet(viewsets.ModelViewSet):
         active_time = data.get('activeTime')
         orders_data = data.get('orders')
         current_total = data.get('currentTotal')
+        is_new_order = data.get('new_order', False)   # True → crear una Order nueva
+        edit_order_id = data.get('order_id', None)    # ID numérico → editar esa Order específica
+        order_note = data.get('note', '')              # Descripción del pedido (Mesa, Para Llevar, etc.)
 
         if not new_status:
             return Response({'error': 'El campo status es requerido'}, status=400)
@@ -78,17 +81,31 @@ class TableViewSet(viewsets.ModelViewSet):
         table.save()
 
         if new_status in ['Ocupada', 'Reservada']:
-            order = table.orders.filter(status='Pendiente').first()
-            if not order:
+            # --- Seleccionar o crear la Order a operar ---
+            if is_new_order:
+                # Nuevo pedido independiente → siempre crear una Order nueva
                 order = Order.objects.create(table=table)
                 order.waiter = request.user
-            
+            elif edit_order_id is not None:
+                # Edición de una orden existente por su ID numérico
+                order = table.orders.filter(id=edit_order_id).first()
+                if not order:
+                    return Response({'error': f'No se encontró la orden {edit_order_id} para esta mesa.'}, status=400)
+            else:
+                # Comportamiento clásico: reusar la primera orden pendiente
+                order = table.orders.filter(status='Pendiente').first()
+                if not order:
+                    order = Order.objects.create(table=table)
+                    order.waiter = request.user
+
             if customer_name is not None:
                 order.customer_name = customer_name
             if active_time is not None:
                 order.active_time = active_time
             if current_total is not None:
                 order.total = current_total
+            if order_note is not None:
+                order.note = order_note
             order.save()
 
             if orders_data is not None:
@@ -102,7 +119,7 @@ class TableViewSet(viewsets.ModelViewSet):
                     if key not in product_counts:
                         product_counts[key] = {'p_id': p_id, 'qty': 0, 'price': price, 'is_takeaway': is_takeaway}
                     product_counts[key]['qty'] += 1
-                
+
                 new_total = 0
                 for key, info in product_counts.items():
                     product = Product.objects.filter(id=info['p_id']).first()
@@ -115,23 +132,24 @@ class TableViewSet(viewsets.ModelViewSet):
                             is_takeaway=info['is_takeaway']
                         )
                         new_total += float(info['price']) * info['qty']
-                
+
                 # Actualizar el total de la orden con el monto calculado
                 order.total = new_total
                 order.save()
 
         elif new_status == 'Libre':
-            order = table.orders.filter(status='Pendiente').first()
-            if order:
+            # Marcar TODAS las órdenes activas de la mesa como Pagadas o Canceladas
+            active_orders = table.orders.filter(status__in=['Pendiente', 'Observada'])
+            for order in active_orders:
                 if order.total == 0:
                     order.status = 'Cancelada'
                 else:
                     order.status = 'Pagada'
                 order.save()
 
-        if hasattr(table, '_active_order'):
-            delattr(table, '_active_order')
-            
+        if hasattr(table, '_active_orders'):
+            delattr(table, '_active_orders')
+
         broadcast_table_update(table.id)
         return Response({'status': 'Estado actualizado', 'table': TableSerializer(table).data})
 

@@ -94,7 +94,7 @@ class EmployeeShiftSerializer(serializers.ModelSerializer):
             
         for o in waiter_orders:
             if getattr(o, 'table', None):
-                observations.append(f"Mesa {o.table.number}: {o.observation_note}")
+                observations.append(f"Mesa {o.table.table_number}: {o.observation_note}")
                 
         # Para Cajeros: Mostrar transacciones tipo "Fuga"
         try:

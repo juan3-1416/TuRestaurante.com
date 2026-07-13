@@ -124,7 +124,23 @@ export function TableStatusDetail({
                   {tickets.map((ticket, tIdx) => (
                     <div key={ticket.id} className="w-full bg-white rounded-3xl border border-gray-200 shadow-sm p-5 flex flex-col relative">
                       <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
-                         <span className="font-black text-lg text-gray-700">Pedido {tIdx + 1}</span>
+                         <div className="flex flex-col gap-1">
+                           <span className="font-black text-lg text-gray-700">Pedido {tIdx + 1}</span>
+                           {/* Nota / descripción del pedido */}
+                           {ticket.items[0]?.orderNote && (
+                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full w-fit ${
+                               ticket.items[0].orderNote === "Para Llevar"
+                                 ? "bg-orange-100 text-orange-600"
+                                 : ticket.items[0].orderNote === "Mesa"
+                                   ? "bg-restaurante-primario/10 text-restaurante-primario"
+                                   : "bg-gray-100 text-gray-500"
+                             }`}>
+                               {ticket.items[0].orderNote === "Para Llevar" && "🥡 "}
+                               {ticket.items[0].orderNote === "Mesa" && "🍽️ "}
+                               {ticket.items[0].orderNote}
+                             </span>
+                           )}
+                         </div>
                          <button 
                            onClick={() => handleAction(`Modificar Pedido:${ticket.id}`)}
                            className="text-sm flex items-center gap-1.5 text-restaurante-primario hover:text-restaurante-oscuro bg-restaurante-primario/10 hover:bg-restaurante-primario/20 px-3 py-1.5 rounded-xl font-bold transition-colors"

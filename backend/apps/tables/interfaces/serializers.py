@@ -10,16 +10,23 @@ class TableSerializer(serializers.ModelSerializer):
     activeTime = serializers.SerializerMethodField()
     currentTotal = serializers.SerializerMethodField()
     activeOrderId = serializers.SerializerMethodField()
+    activeOrderIds = serializers.SerializerMethodField()
     orders = serializers.SerializerMethodField()
 
     class Meta:
         model = Table
-        fields = ['id', 'number', 'capacity', 'status', 'pos_x', 'pos_y', 'customerName', 'activeTime', 'currentTotal', 'activeOrderId', 'orders']
+        fields = ['id', 'number', 'capacity', 'status', 'pos_x', 'pos_y', 'customerName', 'activeTime', 'currentTotal', 'activeOrderId', 'activeOrderIds', 'orders']
+
+    def get_active_orders(self, obj):
+        """Devuelve TODAS las órdenes activas (Pendiente u Observada) de la mesa."""
+        if not hasattr(obj, '_active_orders'):
+            obj._active_orders = list(obj.orders.filter(status__in=['Pendiente', 'Observada']).order_by('id'))
+        return obj._active_orders
 
     def get_active_order(self, obj):
-        if not hasattr(obj, '_active_order'):
-            obj._active_order = obj.orders.filter(status__in=['Pendiente', 'Observada']).first()
-        return obj._active_order
+        """Devuelve la primera orden activa (compatibilidad con campos existentes)."""
+        orders = self.get_active_orders(obj)
+        return orders[0] if orders else None
 
     def get_customerName(self, obj):
         order = self.get_active_order(obj)
@@ -30,25 +37,37 @@ class TableSerializer(serializers.ModelSerializer):
         return order.active_time if order else None
 
     def get_currentTotal(self, obj):
-        order = self.get_active_order(obj)
-        return float(order.total) if order else 0.0
+        """Suma los totales de TODAS las órdenes activas."""
+        active_orders = self.get_active_orders(obj)
+        return float(sum(order.total for order in active_orders)) if active_orders else 0.0
 
     def get_activeOrderId(self, obj):
+        """ID de la primera orden activa (compatibilidad)."""
         order = self.get_active_order(obj)
         return order.id if order else None
 
+    def get_activeOrderIds(self, obj):
+        """Lista de IDs de TODAS las órdenes activas de la mesa."""
+        active_orders = self.get_active_orders(obj)
+        return [order.id for order in active_orders]
+
     def get_orders(self, obj):
-        order = self.get_active_order(obj)
-        if not order:
+        """Devuelve los ítems de TODAS las órdenes activas, cada uno con su orderId y note."""
+        active_orders = self.get_active_orders(obj)
+        if not active_orders:
             return []
-        items = order.items.select_related('product').all()
         products = []
-        for item in items:
-            for _ in range(item.quantity):
-                product_data = ProductSerializer(item.product).data
-                product_data['cartId'] = str(uuid.uuid4())
-                product_data['price'] = float(item.price)
-                product_data['isTakeaway'] = item.is_takeaway
-                products.append(product_data)
+        for order in active_orders:
+            items = order.items.select_related('product').all()
+            for item in items:
+                for _ in range(item.quantity):
+                    product_data = ProductSerializer(item.product).data
+                    product_data['cartId'] = str(uuid.uuid4())
+                    product_data['price'] = float(item.price)
+                    product_data['isTakeaway'] = item.is_takeaway
+                    product_data['orderId'] = order.id   # ID numérico real del backend
+                    product_data['orderNote'] = order.note  # Descripción del pedido
+                    products.append(product_data)
         return products
+
 
