@@ -17,6 +17,7 @@ export interface Product {
   category: string;
   cartId?: string; // Añadido para identificar cada unidad de forma única en el carrito
   status?: string;
+  isTakeaway?: boolean; // Para llevar
 }
 
 interface UseTableProductMenuProps {
@@ -80,17 +81,30 @@ export function useTableProductMenu({ selectedProducts, setSelectedProducts }: U
   }, [products, selectedCategory]);
 
   const cartItems = useMemo(() => {
+    // Se agrupa por id + isTakeaway para que "Pizza" y "Pizza (Para Llevar)" sean filas distintas
     const grouped = selectedProducts.reduce((acc, curr) => {
-      if (!acc[curr.id]) {
-        acc[curr.id] = { ...curr, quantity: 1, instances: [curr] };
+      const key = `${curr.id}-${curr.isTakeaway ?? false}`;
+      if (!acc[key]) {
+        acc[key] = { ...curr, quantity: 1, instances: [curr] };
       } else {
-        acc[curr.id].quantity += 1;
-        acc[curr.id].instances.push(curr);
+        acc[key].quantity += 1;
+        acc[key].instances.push(curr);
       }
       return acc;
-    }, {} as Record<number, Product & { quantity: number, instances: Product[] }>);
+    }, {} as Record<string, Product & { quantity: number, instances: Product[] }>);
     return Object.values(grouped);
   }, [selectedProducts]);
+
+  // Invierte el flag isTakeaway de todas las instancias del producto en el carrito
+  const handleToggleTakeaway = (productId: number, isTakeaway: boolean) => {
+    setSelectedProducts(prev =>
+      prev.map(p =>
+        p.id === productId && (p.isTakeaway ?? false) === isTakeaway
+          ? { ...p, isTakeaway: !isTakeaway }
+          : p
+      )
+    );
+  };
 
   return {
     products,
@@ -102,6 +116,7 @@ export function useTableProductMenu({ selectedProducts, setSelectedProducts }: U
     handleAddProduct,
     handleRemoveProduct,
     handleRemoveAllOfProduct,
+    handleToggleTakeaway,
     isLoadingProducts: isLoading
   }
 }

@@ -24,8 +24,8 @@ export function CloseShiftModal({ cashierName }: CloseShiftModalProps) {
   const shiftInitialBalance = shift ? Number(shift.initial_balance) : 0
 
   // Ingresos y gastos calculados directamente desde el backend (ya calculados en el turno)
-  const income = transactions.reduce((acc: number, t: any) => t.transaction_type === 'income' ? acc + Number(t.amount) : acc, 0)
-  const expenses = transactions.reduce((acc: number, t: any) => t.transaction_type === 'expense' ? acc + Number(t.amount) : acc, 0)   // OJO: total_expense (sin 's')
+  const income = transactions.reduce((acc: number, t: { transaction_type: string, amount: string | number }) => t.transaction_type === 'income' ? acc + Number(t.amount) : acc, 0)
+  const expenses = transactions.reduce((acc: number, t: { transaction_type: string, amount: string | number }) => t.transaction_type === 'expense' ? acc + Number(t.amount) : acc, 0)
   const finalBalance = shiftInitialBalance + income - expenses
   const totalOperations = transactions.length
 
@@ -45,12 +45,18 @@ export function CloseShiftModal({ cashierName }: CloseShiftModalProps) {
 
   const handleCloseShift = async () => {
     setIsClosing(true)
-    await new Promise((resolve) => setTimeout(resolve, 1500)) // Simulamos generar reporte y guardado
-    
-    // Cerramos el turno y la caja global en el backend
-    await closeShift.mutateAsync()
-    setIsClosing(false)
-    setIsOpen(false)
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 1500)) // Simulamos generar reporte y guardado
+      
+      // Cerramos el turno y la caja global en el backend
+      await closeShift.mutateAsync()
+    } catch (e) {
+      const err = e as { response?: { data?: { error?: string } } }
+      alert(err.response?.data?.error || "Ocurrió un error al cerrar la caja.")
+    } finally {
+      setIsClosing(false)
+      setIsOpen(false)
+    }
   }
 
   return (

@@ -14,7 +14,7 @@ interface TableDetailProps {
 }
 
 export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
-  const { updateTableStatus } = useTables()
+  const { updateTableStatus, reportWalkout } = useTables()
   const [isLoading, setIsLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<"detail" | "products">("detail")
@@ -66,6 +66,14 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
         activeTime: "0 min"
       })
       onClose()
+    } else if (actionName === "Cancelar Apertura") {
+      // Mesa abierta sin pedidos → backend detecta total 0 y cancela la orden
+      await updateTableStatus.mutateAsync({
+        id: table.id,
+        status: "Libre",
+        orders: []
+      })
+      onClose()
     } else if (actionName === "Tomando orden" || actionName === "Agregar Nueva Orden") {
       setOrderMode("append")
       setEditingTicketId(crypto.randomUUID())
@@ -102,7 +110,8 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
         productId: p.id,
         id: p.id, // El backend usa prod.get('id') para identificar el producto
         name: p.name,
-        price: p.price
+        price: p.price,
+        isTakeaway: p.isTakeaway ?? false
       }));
 
       if (orderMode === "append") {
@@ -160,6 +169,19 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
             actionLoading={actionLoading}
             handleAction={handleAction}
             onConfirmReservation={handleConfirmReservation}
+            onReportWalkout={async (note) => {
+              setIsLoading(true)
+              setActionLoading("Reportar Fuga")
+              try {
+                await reportWalkout.mutateAsync({ id: table.id, note })
+              } catch (e) {
+                const err = e as { response?: { data?: { error?: string } } }
+                alert(err?.response?.data?.error || "Error al reportar la fuga.")
+              }
+              setIsLoading(false)
+              setActionLoading(null)
+              onClose()
+            }}
           />
         ) : (
           <TableProductMenu 

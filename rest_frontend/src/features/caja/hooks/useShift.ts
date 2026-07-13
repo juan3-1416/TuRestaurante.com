@@ -61,6 +61,19 @@ export function useShift() {
     },
   });
 
+  const registerIncome = useMutation({
+    mutationFn: async ({ amount, description }: { amount: number; description: string }) => {
+      const response = await apiClient.post("/cashier/transactions/income/", {
+        amount,
+        description,
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["currentShift"] });
+    },
+  });
+
   return {
     shift,
     isLoading,
@@ -70,5 +83,6 @@ export function useShift() {
     openShift,
     closeShift,
     registerExpense,
+    registerIncome,
   };
 }

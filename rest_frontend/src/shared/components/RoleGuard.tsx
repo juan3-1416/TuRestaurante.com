@@ -13,15 +13,14 @@ export function RoleGuard({ children, allowedRoles }: RoleGuardProps) {
 
   // Calculamos la autorización directamente durante el renderizado
   const isAuthorized = (() => {
-    // Si no hay sesión, no tiene acceso
     if (!isAuthenticated) return false;
     
     // Si el componente exige roles específicos
     if (allowedRoles) {
       // Si por alguna razón el usuario aún no carga, prevenimos el acceso por seguridad
       if (!user?.role) return false;
-      // Verificamos si su rol está permitido
-      return allowedRoles.includes(user.role);
+      // Verificamos si su rol está permitido (ignorando mayúsculas/minúsculas)
+      return allowedRoles.map(r => r.toLowerCase()).includes(user.role.toLowerCase());
     }
     
     // Si no se exigieron roles específicos (allowedRoles es undefined), 

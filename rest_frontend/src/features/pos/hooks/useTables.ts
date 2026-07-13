@@ -19,6 +19,7 @@ export function useTables() {
       return fetchedTables.map((t) => ({
         ...t,
         activeOrderId: t.activeOrderId ?? null,
+        observationNote: (t as { observationNote?: string }).observationNote ?? null,
         currentTotal: t.currentTotal !== undefined 
           ? t.currentTotal 
           : (t.orders || []).reduce((acc: number, item: OrderItem) => acc + (Number(item.price) || 0), 0)
@@ -116,6 +117,26 @@ export function useTables() {
     },
   });
 
+  const reportWalkout = useMutation({
+    mutationFn: async ({ id, note }: { id: string | number; note: string }) => {
+      const response = await apiClient.patch(`/tables/${id}/report_walkout/`, { note });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tables"] });
+    },
+  });
+
+  const resolveWalkout = useMutation({
+    mutationFn: async (id: string | number) => {
+      const response = await apiClient.patch(`/tables/${id}/resolve_walkout/`);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tables"] });
+    },
+  });
+
   return {
     tables,
     isLoading,
@@ -125,5 +146,7 @@ export function useTables() {
     editTable,
     deleteTable,
     updateTableStatus,
+    reportWalkout,
+    resolveWalkout,
   };
 }
