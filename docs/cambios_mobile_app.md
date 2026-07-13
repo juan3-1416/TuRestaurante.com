@@ -7,6 +7,7 @@ Para que la aplicación móvil pueda comunicarse con el servidor (Backend) alber
 
 * **Nuevo Archivo de Configuración:** Se creó un nuevo archivo de configuración dedicado exclusivamente a manejar las constantes de red (como la IP del servidor). Este archivo centraliza la dirección, por lo que el día de la presentación, **solo se debe cambiar la IP local (`192.168.100.122`) en este único archivo** para que toda la app móvil funcione.
 * **URL de la API REST:** La base de la URL (`baseUrl`) en las peticiones HTTP consume la IP definida en este nuevo archivo, apuntando correctamente a `http://192.168.100.122:8000/api`.
+La solución que se desarrollo en el plan: Crearé un único archivo llamado config.js y limpiaré esos 5 archivos. Así, el día de la prueba, solo abres config.js, escribes tu IP del día, y toda la app (tanto la API como los WebSockets) se conectará mágicamente.
 
 ## 2. Implementación de WebSockets (Tiempo Real)
 Para reflejar instantáneamente en la aplicación móvil los cambios realizados por otros usuarios en la web (y viceversa):
