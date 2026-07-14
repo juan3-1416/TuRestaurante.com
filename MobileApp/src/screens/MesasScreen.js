@@ -1347,11 +1347,7 @@ await AsyncStorage.multiRemove([
                   />
                 ) : (
                   <>
-                    <Icon
-                      name="square"
-                      size={17}
-                      color={palette.white}
-                    />
+
                     <Text style={styles.shiftEndConfirmText}>
                       Cerrar turno
                     </Text>
@@ -1614,11 +1610,7 @@ await AsyncStorage.multiRemove([
               />
             ) : (
               <>
-                <Icon
-                  name={turnoActivo ? "square" : "play"}
-                  size={17}
-                  color={palette.white}
-                />
+
 
                 <Text style={styles.shiftActionText}>
                   {turnoActivo

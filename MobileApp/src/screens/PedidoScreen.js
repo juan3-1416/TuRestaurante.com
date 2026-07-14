@@ -1232,68 +1232,6 @@ useFocusEffect(
         </TouchableOpacity>
       </View>
 
-      <View
-        style={[
-          styles.shiftBanner,
-          turnoActivo
-            ? styles.shiftBannerActive
-            : styles.shiftBannerClosed,
-        ]}
-      >
-        <View
-          style={[
-            styles.shiftIconBox,
-            turnoActivo
-              ? styles.shiftIconActive
-              : styles.shiftIconClosed,
-          ]}
-        >
-          <Icon
-            name={
-              cargandoTurno
-                ? "loader"
-                : turnoActivo
-                ? "check-circle"
-                : "lock"
-            }
-            size={18}
-            color={
-              turnoActivo
-                ? palette.success
-                : palette.warning
-            }
-          />
-        </View>
-
-        <View style={styles.shiftTextBox}>
-          <Text style={styles.shiftTitle}>
-            {cargandoTurno
-              ? "Verificando turno..."
-              : turnoActivo
-              ? "Turno activo"
-              : "Turno cerrado"}
-          </Text>
-
-          <Text style={styles.shiftDescription}>
-            {cargandoTurno
-              ? "Espera mientras confirmamos tu jornada."
-              : turnoActivo
-              ? "Puedes registrar productos en esta mesa."
-              : "Puedes consultar el menú, pero no enviar pedidos."}
-          </Text>
-        </View>
-
-        {!turnoActivo && !cargandoTurno ? (
-          <TouchableOpacity
-            style={styles.goTablesBtn}
-            onPress={() => navigation.navigate("Mesas")}
-          >
-            <Text style={styles.goTablesText}>
-              Ir a Mesas
-            </Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
 
       <View style={styles.tabs}>
         <TouchableOpacity
