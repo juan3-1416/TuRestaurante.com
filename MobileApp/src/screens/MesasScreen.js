@@ -11,12 +11,16 @@ import {
   TextInput,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
-import { colors } from "../theme/colors";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { useTableWebSocket } from "../services/useTableWebSocket";
 
 import { API_BASE_URL } from "../services/config";
+
+// Asegura que la fuente Feather esté disponible en Android.
+if (typeof Icon.loadFont === "function") {
+  Icon.loadFont().catch(() => {});
+}
 
 const API_URL = `${API_BASE_URL}/api/tables/`;
 const USERS_URL = `${API_BASE_URL}/api/users/`;
@@ -25,47 +29,34 @@ const SHIFT_START_URL = `${API_BASE_URL}/api/users/shifts/start/`;
 const SHIFT_END_URL = `${API_BASE_URL}/api/users/shifts/end/`;
 
 const palette = {
-  light: colors.restaurantLight ?? "#78B9B5",
-  accent:
-    colors.restaurantAccent ??
-    colors.accent ??
-    "#0F828C",
-  primary:
-    colors.restaurantPrimary ??
-    colors.primary ??
-    "#065084",
-  dark:
-    colors.restaurantDark ??
-    colors.dark ??
-    "#320A6B",
+  light: "#78B9B5",
+  accent: "#0F828C",
+  primary: "#065084",
+  dark: "#320A6B",
+  purpleMedium: "#4B1D7A",
 
-  background: colors.background ?? "#F8FAFC",
-  surface: colors.surface ?? colors.white ?? "#FFFFFF",
-  card: colors.card ?? colors.white ?? "#FFFFFF",
-  muted: colors.muted ?? "#E8F3F2",
+  background: "#F6F9FB",
+  surface: "#FFFFFF",
+  card: "#DDEAF0",
+  muted: "#EDF3F5",
 
-  text: colors.text ?? "#0F172A",
-  textSecondary: colors.textSecondary ?? "#475569",
-  gray: colors.gray ?? "#64748B",
-  placeholder: colors.placeholder ?? "#94A3B8",
-  border: colors.border ?? "#DCE7E7",
+  text: "#26055F",
+  textSecondary: "#56667A",
+  gray: "#728196",
+  placeholder: "#97A5B5",
+  border: "#D8E3E8",
 
-  success: colors.success ?? "#15803D",
-  successBackground:
-    colors.successBackground ?? "#DCFCE7",
-  warning: colors.warning ?? "#B45309",
-  warningBackground:
-    colors.warningBackground ?? "#FEF3C7",
-  danger: colors.danger ?? "#DC2626",
-  dangerBackground:
-    colors.dangerBackground ?? "#FEE2E2",
-  info: colors.info ?? "#065084",
-  infoBackground:
-    colors.infoBackground ?? "#E0F2FE",
+  success: "#0B8A56",
+  successBackground: "#ECF8F2",
+  warning: "#C67A1D",
+  warningBackground: "#FFF6E7",
+  danger: "#FF6268",
+  dangerBackground: "#FFF0F1",
+  info: "#065084",
+  infoBackground: "#E7F1F6",
 
-  white: colors.white ?? "#FFFFFF",
-  overlay:
-    colors.overlay ?? "rgba(15, 23, 42, 0.45)",
+  white: "#FFFFFF",
+  overlay: "rgba(20, 7, 48, 0.48)",
 };
 
 export default function MesasScreen({ navigation }) {
@@ -1040,37 +1031,75 @@ await AsyncStorage.multiRemove([
     }
   };
 
+  const statusMatches = (status, expected) =>
+    String(status || "").toLowerCase() ===
+    String(expected || "").toLowerCase();
+
+  const filterCounts = {
+    Todas: tables.length,
+    Libre: tables.filter((table) =>
+      statusMatches(table.status, "Libre")
+    ).length,
+    Ocupada: tables.filter((table) =>
+      statusMatches(table.status, "Ocupada")
+    ).length,
+    Reservada: tables.filter((table) =>
+      statusMatches(table.status, "Reservada")
+    ).length,
+  };
+
   const filtered =
     filter === "Todas"
       ? tables
-      : tables.filter((table) => table.status === filter);
+      : tables.filter((table) =>
+          statusMatches(table.status, filter)
+        );
 
   const getStyles = (status) => {
-    switch (status) {
-      case "Libre":
-        return {
-          color: palette.success,
-          icon: "check-circle",
-        };
-      case "Ocupada":
-        return {
-          color: palette.danger,
-          icon: "users",
-        };
-      case "Reservada":
-        return {
-          color: palette.warning,
-          icon: "clock",
-        };
-      case "Pedido":
+    const normalizedStatus = String(
+      status || ""
+    ).toLowerCase();
+
+    switch (normalizedStatus) {
+      case "libre":
         return {
           color: palette.accent,
+          borderColor: palette.border,
+          icon: "check",
+          label: "Disponible",
+          metricLabel: "ESTADO",
+        };
+      case "ocupada":
+        return {
+          color: palette.danger,
+          borderColor: "#FF9EA2",
+          icon: "shopping-bag",
+          label: "Ocupada",
+          metricLabel: "CONSUMO",
+        };
+      case "reservada":
+        return {
+          color: palette.warning,
+          borderColor: "#E8C38F",
+          icon: "calendar",
+          label: "Reservada",
+          metricLabel: "RESERVA",
+        };
+      case "pedido":
+        return {
+          color: palette.accent,
+          borderColor: palette.light,
           icon: "shopping-cart",
+          label: "Pedido activo",
+          metricLabel: "PEDIDO",
         };
       default:
         return {
           color: palette.gray,
+          borderColor: palette.border,
           icon: "circle",
+          label: status || "Sin estado",
+          metricLabel: "ESTADO",
         };
     }
   };
@@ -1078,95 +1107,151 @@ await AsyncStorage.multiRemove([
   const renderItem = ({ item }) => {
     const statusStyle = getStyles(item.status);
     const numeroMesa = getTableNumber(item);
+    const customerName =
+      item.customerName ??
+      item.customer_name ??
+      "";
+
+    const activeTime =
+      item.activeTime ??
+      item.active_time ??
+      "";
+
+    const currentTotal =
+      item.currentTotal ??
+      item.current_total ??
+      item.total ??
+      0;
+
+    const isOccupied = statusMatches(
+      item.status,
+      "Ocupada"
+    );
+
+    const isReserved = statusMatches(
+      item.status,
+      "Reservada"
+    );
+
+    const isFree = statusMatches(
+      item.status,
+      "Libre"
+    );
+
+    let metricValue = statusStyle.label;
+
+    if (isOccupied) {
+      metricValue = `Bs. ${Number(currentTotal || 0).toFixed(2)}`;
+    } else if (isReserved) {
+      metricValue = activeTime || "Reservada";
+    } else if (isFree) {
+      metricValue = "Disponible";
+    }
 
     return (
-      <View style={[styles.card, { borderColor: statusStyle.color }]}>
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() => navigation.navigate("Pedido", { mesa: item })}
-        >
-          <View
-            style={[styles.dot, { backgroundColor: statusStyle.color }]}
-          />
+      <TouchableOpacity
+        activeOpacity={0.86}
+        style={[
+          styles.card,
+          {
+            borderColor: statusStyle.borderColor,
+          },
+        ]}
+        onPress={() =>
+          navigation.navigate("Pedido", {
+            mesa: item,
+          })
+        }
+      >
+        <View
+          style={[
+            styles.dot,
+            {
+              backgroundColor: statusStyle.color,
+            },
+          ]}
+        />
 
-          <View style={styles.row}>
-            <View
+        <View style={styles.cardHeader}>
+          <View style={styles.iconBox}>
+            <Icon
+              name={statusStyle.icon}
+              size={20}
+              color={statusStyle.color}
+            />
+          </View>
+
+          <View style={styles.cardTitleBox}>
+            <Text
+              numberOfLines={1}
+              style={styles.title}
+            >
+              Mesa {numeroMesa}
+            </Text>
+
+            <View style={styles.capacityRow}>
+              <Icon
+                name="users"
+                size={12}
+                color={palette.gray}
+              />
+              <Text style={styles.sub}>
+                {item.capacity || 0} personas
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.activityArea}>
+          {customerName ? (
+            <>
+              <Text style={styles.activityLabel}>
+                CLIENTE
+              </Text>
+              <Text
+                numberOfLines={2}
+                style={styles.client}
+              >
+                {customerName}
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.empty}>
+              Sin actividad reciente
+            </Text>
+          )}
+        </View>
+
+        <View style={styles.cardFooter}>
+          <View style={styles.metricBox}>
+            <Text style={styles.metricLabel}>
+              {statusStyle.metricLabel}
+            </Text>
+            <Text
+              numberOfLines={1}
               style={[
-                styles.iconBox,
-                { backgroundColor: statusStyle.color + "20" },
+                styles.metricValue,
+                {
+                  color:
+                    isOccupied
+                      ? palette.primary
+                      : statusStyle.color,
+                },
               ]}
             >
-              <Icon
-                name={statusStyle.icon}
-                size={20}
-                color={statusStyle.color}
-              />
-            </View>
-
-            <View>
-              <Text style={styles.title}>Mesa {numeroMesa}</Text>
-              <Text style={styles.sub}>{item.capacity} personas</Text>
-            </View>
+              {metricValue}
+            </Text>
           </View>
 
-          {item.customerName ? (
-            <View style={styles.clientBox}>
-              <Text style={styles.clientLabel}>Cliente</Text>
-              <Text style={styles.client}>{item.customerName}</Text>
-            </View>
-          ) : (
-            <Text style={styles.empty}>Sin Reservar</Text>
-          )}
-
-          <View style={styles.footer}>
-            {item.status === "Ocupada" && (
-              <Text style={styles.total}>Bs. {item.currentTotal || 0}</Text>
-            )}
-
-            {item.status === "Reservada" && (
-              <Text style={styles.time}>{item.activeTime || "Reservada"}</Text>
-            )}
-
-            {item.status === "Libre" && (
-              <Text style={styles.available}>Disponible</Text>
-            )}
-
-            {item.status === "Pedido" && (
-              <Text style={styles.orderText}>Pedido activo</Text>
-            )}
-
-            <Icon name="play" size={16} color={palette.primary} />
+          <View style={styles.cardArrow}>
+            <Icon
+              name="chevron-right"
+              size={17}
+              color={palette.primary}
+            />
           </View>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.editBtn}
-          onPress={() =>
-            updateTableCapacity(item.id, Number(item.capacity) + 1)
-          }
-        >
-          <Text style={styles.editText}>
-            + Capacidad Mesa {numeroMesa}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.deleteBtn,
-            !puedeEliminarMesa(item) && styles.deleteBtnDisabled,
-          ]}
-          onPress={() => confirmarEliminarMesa(item)}
-        >
-          <Text
-            style={[
-              styles.deleteText,
-              !puedeEliminarMesa(item) && styles.deleteTextDisabled,
-            ]}
-          >
-            Eliminar
-          </Text>
-        </TouchableOpacity>
-      </View>
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -1209,7 +1294,7 @@ await AsyncStorage.multiRemove([
                 <Icon
                   name="x"
                   size={21}
-                  color={palette.primary}
+                  color={palette.light}
                 />
               </TouchableOpacity>
             </View>
@@ -1262,11 +1347,7 @@ await AsyncStorage.multiRemove([
                   />
                 ) : (
                   <>
-                    <Icon
-                      name="square"
-                      size={17}
-                      color={palette.white}
-                    />
+
                     <Text style={styles.shiftEndConfirmText}>
                       Cerrar turno
                     </Text>
@@ -1299,6 +1380,17 @@ await AsyncStorage.multiRemove([
               >
                 <Icon name="x" size={24} color={palette.white} />
               </TouchableOpacity>
+
+              <View style={styles.drawerBrandRow}>
+                <View style={styles.brandLogo}>
+                  <Text style={styles.brandLogoText}>N</Text>
+                </View>
+
+                <View style={styles.brandTextBox}>
+                  <Text style={styles.brandName}>NextOrder</Text>
+                  <Text style={styles.brandRole}>MESERO</Text>
+                </View>
+              </View>
 
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
@@ -1339,7 +1431,7 @@ await AsyncStorage.multiRemove([
                 style={[styles.drawerItem, styles.drawerItemActive]}
                 onPress={() => setMenuVisible(false)}
               >
-                <Icon name="grid" size={21} color={palette.primary} />
+                <Icon name="grid" size={21} color={palette.white} />
                 <Text style={styles.drawerItemText}>Mapa de mesas</Text>
               </TouchableOpacity>
 
@@ -1350,7 +1442,7 @@ await AsyncStorage.multiRemove([
                 <Icon
                   name="clipboard"
                   size={21}
-                  color={palette.primary}
+                  color={palette.light}
                 />
                 <Text style={styles.drawerItemText}>
                   Pedidos pendientes
@@ -1364,7 +1456,7 @@ await AsyncStorage.multiRemove([
                 <Icon
                   name="clock"
                   size={21}
-                  color={palette.primary}
+                  color={palette.light}
                 />
                 <Text style={styles.drawerItemText}>
                   Historial de ventas
@@ -1377,7 +1469,7 @@ await AsyncStorage.multiRemove([
                 style={styles.logoutBtn}
                 onPress={cerrarSesion}
               >
-                <Icon name="log-out" size={20} color={palette.danger} />
+                <Icon name="log-out" size={20} color="#FFB4B8" />
                 <Text style={styles.logoutText}>Cerrar sesión</Text>
               </TouchableOpacity>
             </View>
@@ -1391,21 +1483,26 @@ await AsyncStorage.multiRemove([
             style={styles.menuBtn}
             onPress={() => setMenuVisible(true)}
           >
-            <Icon name="menu" size={26} color={palette.white} />
+            <Icon name="menu" size={23} color={palette.white} />
           </TouchableOpacity>
 
-          <Text style={styles.pageTitle}>Mesas</Text>
+          <View style={styles.headerTextBox}>
+            <Text style={styles.pageTitle}>Mapa de Mesas</Text>
+            <Text style={styles.pageSubtitle}>
+              Estado del restaurante en tiempo real
+            </Text>
+          </View>
 
           <TouchableOpacity
             style={styles.refreshBtn}
             onPress={refrescarPantalla}
             disabled={loading || procesandoTurno}
           >
-            <Icon name="refresh-cw" size={18} color={palette.primary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.addMesaBtn} onPress={crearMesa}>
-            <Text style={styles.addMesaText}>+ Mesa</Text>
+            {loading ? (
+              <ActivityIndicator size="small" color={palette.primary} />
+            ) : (
+              <Icon name="refresh-cw" size={18} color={palette.primary} />
+            )}
           </TouchableOpacity>
         </View>
 
@@ -1513,11 +1610,7 @@ await AsyncStorage.multiRemove([
               />
             ) : (
               <>
-                <Icon
-                  name={turnoActivo ? "square" : "play"}
-                  size={17}
-                  color={palette.white}
-                />
+
 
                 <Text style={styles.shiftActionText}>
                   {turnoActivo
@@ -1529,26 +1622,40 @@ await AsyncStorage.multiRemove([
           </TouchableOpacity>
         </View>
 
-        <View style={styles.filters}>
-          {["Todas", "Libre", "Ocupada", "Reservada"].map((item) => (
-            <TouchableOpacity
-              key={item}
-              onPress={() => setFilter(item)}
-              style={[
-                styles.filter,
-                filter === item && styles.activeFilter,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.filterText,
-                  filter === item && { color: palette.white },
-                ]}
-              >
-                {item}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.filterPanel}>
+          <View style={styles.filterHeadingRow}>
+            <View style={styles.filterHeadingIcon}>
+              <Icon name="filter" size={17} color={palette.primary} />
+            </View>
+
+            <Text style={styles.filterHeading}>Filtrar mesas</Text>
+          </View>
+
+          <View style={styles.filters}>
+            {["Todas", "Libre", "Ocupada", "Reservada"].map(
+              (item) => (
+                <TouchableOpacity
+                  key={item}
+                  onPress={() => setFilter(item)}
+                  style={[
+                    styles.filter,
+                    filter === item && styles.activeFilter,
+                  ]}
+                >
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.filterText,
+                      filter === item &&
+                        styles.activeFilterText,
+                    ]}
+                  >
+                    {item} ({filterCounts[item] || 0})
+                  </Text>
+                </TouchableOpacity>
+              )
+            )}
+          </View>
         </View>
 
         {loading ? (
@@ -1562,7 +1669,9 @@ await AsyncStorage.multiRemove([
             renderItem={renderItem}
             keyExtractor={(item) => String(item.id)}
             numColumns={2}
-            columnWrapperStyle={{ justifyContent: "space-between" }}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContent}
+            columnWrapperStyle={styles.columnWrapper}
             ListEmptyComponent={
               <View style={styles.emptyListBox}>
                 <Text style={styles.emptyListText}>
@@ -1581,104 +1690,124 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: palette.background,
-    padding: 15,
+    paddingHorizontal: 14,
+    paddingTop: 12,
   },
 
   topBar: {
+    minHeight: 66,
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
-    gap: 8,
-    backgroundColor: palette.primary,
-    borderRadius: 18,
-    padding: 10,
-    elevation: 3,
+    marginBottom: 12,
+    backgroundColor: palette.surface,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: palette.border,
+    elevation: 2,
+    shadowColor: "#16072F",
+    shadowOpacity: 0.08,
+    shadowRadius: 9,
+    shadowOffset: { width: 0, height: 4 },
   },
 
   menuBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 45,
+    height: 45,
+    borderRadius: 15,
     backgroundColor: palette.dark,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: palette.light,
+  },
+
+  headerTextBox: {
+    flex: 1,
+    marginLeft: 12,
+    marginRight: 8,
   },
 
   pageTitle: {
-    flex: 1,
-    marginLeft: 4,
-    fontSize: 22,
-    fontWeight: "bold",
-    color: palette.white,
+    fontSize: 20,
+    fontWeight: "900",
+    color: palette.dark,
+  },
+
+  pageSubtitle: {
+    marginTop: 2,
+    fontSize: 10.5,
+    color: palette.textSecondary,
   },
 
   refreshBtn: {
     width: 42,
     height: 42,
-    borderRadius: 12,
-    backgroundColor: palette.light,
+    borderRadius: 14,
+    backgroundColor: "#E3EFF3",
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#D2E4EA",
   },
 
   addMesaBtn: {
-    backgroundColor: palette.accent,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: palette.light,
+    display: "none",
   },
 
   addMesaText: {
     color: palette.white,
-    fontWeight: "bold",
+    fontWeight: "800",
   },
 
   shiftCard: {
     borderRadius: 18,
-    padding: 15,
-    marginBottom: 15,
+    padding: 13,
+    marginBottom: 12,
     borderWidth: 1,
-    elevation: 2,
+    backgroundColor: palette.surface,
+    elevation: 1,
+    shadowColor: "#16072F",
+    shadowOpacity: 0.05,
+    shadowRadius: 7,
+    shadowOffset: { width: 0, height: 3 },
   },
 
   shiftCardActive: {
-    backgroundColor: palette.successBackground,
-    borderColor: palette.success,
+    borderColor: "#A9DBC3",
+    borderLeftWidth: 5,
+    borderLeftColor: palette.success,
   },
 
   shiftCardInactive: {
-    backgroundColor: palette.card,
     borderColor: palette.border,
+    borderLeftWidth: 5,
+    borderLeftColor: palette.primary,
   },
 
   shiftCardTop: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
   },
 
   shiftStatusIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 15,
+    width: 42,
+    height: 42,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginRight: 10,
   },
 
   shiftStatusIconActive: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: palette.successBackground,
     borderWidth: 1,
-    borderColor: palette.success,
+    borderColor: "#B9E3CE",
   },
 
   shiftStatusIconInactive: {
-    backgroundColor: palette.muted,
+    backgroundColor: palette.infoBackground,
     borderWidth: 1,
-    borderColor: palette.light,
+    borderColor: "#C7DDE7",
   },
 
   shiftInfo: {
@@ -1689,18 +1818,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
-    gap: 8,
   },
 
   shiftTitle: {
-    color: palette.text,
-    fontSize: 17,
-    fontWeight: "800",
+    color: palette.dark,
+    fontSize: 15,
+    fontWeight: "900",
+    marginRight: 7,
   },
 
   shiftBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 999,
   },
 
@@ -1709,15 +1838,13 @@ const styles = StyleSheet.create({
   },
 
   shiftBadgeInactive: {
-    backgroundColor: palette.muted,
-    borderWidth: 1,
-    borderColor: palette.light,
+    backgroundColor: palette.infoBackground,
   },
 
   shiftBadgeText: {
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: "900",
-    letterSpacing: 0.4,
+    letterSpacing: 0.45,
   },
 
   shiftBadgeTextActive: {
@@ -1730,37 +1857,530 @@ const styles = StyleSheet.create({
 
   shiftDescription: {
     color: palette.textSecondary,
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 6,
+    fontSize: 10.5,
+    lineHeight: 15,
+    marginTop: 4,
   },
 
   shiftActionButton: {
-    minHeight: 45,
-    borderRadius: 13,
-    marginTop: 14,
+    minHeight: 40,
+    borderRadius: 12,
+    marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
   },
 
   shiftStartButton: {
-    backgroundColor: palette.accent,
+    backgroundColor: palette.primary,
   },
 
   shiftEndButton: {
-    backgroundColor: palette.danger,
+    backgroundColor: palette.dark,
   },
 
   shiftButtonDisabled: {
-    opacity: 0.62,
+    opacity: 0.6,
   },
 
   shiftActionText: {
     color: palette.white,
+    fontSize: 12.5,
+    fontWeight: "900",
+    marginLeft: 7,
+  },
+
+  filterPanel: {
+    backgroundColor: palette.surface,
+    borderRadius: 18,
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 9,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: palette.border,
+    elevation: 1,
+  },
+
+  filterHeadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+
+  filterHeadingIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: "#E3EFF3",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
+
+  filterHeading: {
+    color: palette.dark,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+
+  filters: {
+    flexDirection: "row",
+  },
+
+  filter: {
+    flex: 1,
+    minHeight: 36,
+    paddingHorizontal: 5,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: palette.muted,
+    borderWidth: 1,
+    borderColor: palette.border,
+    alignItems: "center",
+    justifyContent: "center",
+    marginHorizontal: 2,
+  },
+
+  activeFilter: {
+    backgroundColor: palette.primary,
+    borderColor: palette.primary,
+    elevation: 2,
+  },
+
+  filterText: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: palette.dark,
+  },
+
+  activeFilterText: {
+    color: palette.white,
+  },
+
+  loadingBox: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  loadingText: {
+    marginTop: 10,
+    color: palette.textSecondary,
+    fontWeight: "800",
+  },
+
+  emptyListBox: {
+    paddingVertical: 48,
+    alignItems: "center",
+  },
+
+  emptyListText: {
+    color: palette.gray,
+    fontWeight: "800",
+  },
+
+  listContent: {
+    paddingBottom: 24,
+  },
+
+  columnWrapper: {
+    justifyContent: "space-between",
+  },
+
+  card: {
+    width: "48.5%",
+    minHeight: 205,
+    padding: 14,
+    borderRadius: 24,
+    backgroundColor: palette.card,
+    borderWidth: 1.5,
+    marginBottom: 14,
+    elevation: 2,
+    shadowColor: "#16072F",
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+  },
+
+  dot: {
+    position: "absolute",
+    top: 13,
+    right: 13,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+  },
+
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingRight: 8,
+  },
+
+  iconBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: palette.white,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.9)",
+    elevation: 1,
+  },
+
+  cardTitleBox: {
+    flex: 1,
+  },
+
+  title: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: palette.dark,
+  },
+
+  capacityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 3,
+  },
+
+  sub: {
+    fontSize: 10.5,
+    color: palette.gray,
+    marginLeft: 4,
+  },
+
+  activityArea: {
+    flex: 1,
+    justifyContent: "center",
+    paddingVertical: 14,
+  },
+
+  activityLabel: {
+    fontSize: 8.5,
+    color: palette.gray,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+  },
+
+  client: {
+    marginTop: 3,
+    fontWeight: "800",
+    fontSize: 12,
+    color: palette.text,
+  },
+
+  empty: {
+    fontSize: 11.5,
+    fontStyle: "italic",
+    color: palette.placeholder,
+  },
+
+  cardFooter: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+
+  metricBox: {
+    flex: 1,
+    paddingRight: 6,
+  },
+
+  metricLabel: {
+    fontSize: 8.5,
+    color: palette.primary,
+    fontWeight: "800",
+    letterSpacing: 0.45,
+  },
+
+  metricValue: {
+    marginTop: 3,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+
+  cardArrow: {
+    width: 30,
+    height: 30,
+    borderRadius: 11,
+    backgroundColor: "rgba(255,255,255,0.68)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  clientBox: {
+    backgroundColor: palette.muted,
+    padding: 10,
+    borderRadius: 15,
+    marginTop: 10,
+  },
+
+  clientLabel: {
+    fontSize: 10,
+    color: palette.gray,
+  },
+
+  footer: {
+    marginTop: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+
+  total: {
+    fontWeight: "900",
+    color: palette.primary,
+  },
+
+  time: {
+    color: palette.warning,
+    fontWeight: "700",
+  },
+
+  available: {
+    color: palette.success,
+    fontWeight: "800",
+  },
+
+  orderText: {
+    color: palette.accent,
+    fontWeight: "800",
+  },
+
+  editBtn: {
+    display: "none",
+  },
+
+  editText: {
+    color: palette.primary,
+    fontWeight: "800",
+  },
+
+  deleteBtn: {
+    display: "none",
+  },
+
+  deleteBtnDisabled: {
+    display: "none",
+  },
+
+  deleteText: {
+    color: palette.danger,
+    fontWeight: "800",
+  },
+
+  deleteTextDisabled: {
+    color: palette.placeholder,
+  },
+
+  modalBackground: {
+    flex: 1,
+    backgroundColor: palette.overlay,
+  },
+
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+  },
+
+  drawer: {
+    width: "82%",
+    maxWidth: 340,
+    height: "100%",
+    backgroundColor: palette.dark,
+    elevation: 14,
+    borderTopRightRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: "hidden",
+  },
+
+  drawerHeader: {
+    backgroundColor: palette.dark,
+    paddingTop: 45,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
+    alignItems: "flex-start",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.10)",
+  },
+
+  closeBtn: {
+    position: "absolute",
+    top: 17,
+    right: 15,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  drawerBrandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 18,
+    paddingRight: 42,
+  },
+
+  brandLogo: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: palette.accent,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 11,
+  },
+
+  brandLogoText: {
+    color: palette.white,
+    fontSize: 22,
+    fontWeight: "900",
+  },
+
+  brandTextBox: {
+    flex: 1,
+  },
+
+  brandName: {
+    color: palette.white,
+    fontSize: 20,
+    fontWeight: "900",
+  },
+
+  brandRole: {
+    color: palette.light,
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+    marginTop: 2,
+  },
+
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "rgba(120,185,181,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 9,
+    borderWidth: 1,
+    borderColor: palette.light,
+  },
+
+  avatarText: {
+    color: palette.white,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+
+  drawerName: {
+    color: palette.white,
+    fontSize: 16,
+    fontWeight: "900",
+  },
+
+  drawerEmail: {
+    color: "#CFC4E5",
+    fontSize: 11.5,
+    marginTop: 4,
+  },
+
+  drawerShiftBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 11,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+
+  drawerShiftBadgeActive: {
+    backgroundColor: "rgba(11,138,86,0.28)",
+  },
+
+  drawerShiftBadgeInactive: {
+    backgroundColor: "rgba(255,255,255,0.10)",
+  },
+
+  drawerShiftDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    marginRight: 7,
+  },
+
+  drawerShiftDotActive: {
+    backgroundColor: "#68E4A8",
+  },
+
+  drawerShiftDotInactive: {
+    backgroundColor: palette.light,
+  },
+
+  drawerShiftText: {
+    color: palette.white,
+    fontSize: 10.5,
+    fontWeight: "800",
+  },
+
+  drawerMenu: {
+    paddingHorizontal: 14,
+    paddingTop: 18,
+  },
+
+  drawerItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 52,
+    paddingHorizontal: 15,
+    borderRadius: 14,
+    marginBottom: 8,
+    backgroundColor: "transparent",
+  },
+
+  drawerItemActive: {
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderLeftWidth: 4,
+    borderLeftColor: palette.light,
+  },
+
+  drawerItemText: {
+    color: palette.white,
     fontSize: 14,
     fontWeight: "800",
+    marginLeft: 13,
+  },
+
+  drawerFooter: {
+    flex: 1,
+    justifyContent: "flex-end",
+    padding: 16,
+  },
+
+  logoutBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    minHeight: 48,
+    paddingHorizontal: 15,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,98,104,0.14)",
+  },
+
+  logoutText: {
+    color: "#FFB4B8",
+    fontWeight: "900",
+    fontSize: 14,
+    marginLeft: 11,
   },
 
   shiftModalOverlay: {
@@ -1771,8 +2391,8 @@ const styles = StyleSheet.create({
 
   shiftModalCard: {
     backgroundColor: palette.surface,
-    borderTopLeftRadius: 26,
-    borderTopRightRadius: 26,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 28,
@@ -1782,7 +2402,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 22,
+    marginBottom: 20,
   },
 
   shiftModalTitleRow: {
@@ -1795,7 +2415,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: palette.danger,
+    backgroundColor: palette.dark,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -1808,7 +2428,7 @@ const styles = StyleSheet.create({
   shiftModalTitle: {
     color: palette.dark,
     fontSize: 20,
-    fontWeight: "800",
+    fontWeight: "900",
   },
 
   shiftModalSubtitle: {
@@ -1828,9 +2448,9 @@ const styles = StyleSheet.create({
   },
 
   shiftObservationLabel: {
-    color: palette.primary,
+    color: palette.dark,
     fontSize: 13,
-    fontWeight: "800",
+    fontWeight: "900",
     marginBottom: 8,
   },
 
@@ -1855,7 +2475,6 @@ const styles = StyleSheet.create({
 
   shiftModalActions: {
     flexDirection: "row",
-    gap: 10,
     marginTop: 18,
   },
 
@@ -1868,360 +2487,28 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: palette.border,
+    marginRight: 5,
   },
 
   shiftCancelText: {
     color: palette.textSecondary,
-    fontWeight: "800",
+    fontWeight: "900",
   },
 
   shiftEndConfirmButton: {
     flex: 1.2,
     minHeight: 48,
     borderRadius: 13,
-    backgroundColor: palette.danger,
+    backgroundColor: palette.dark,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    marginLeft: 5,
   },
 
   shiftEndConfirmText: {
     color: palette.white,
-    fontWeight: "800",
-  },
-
-  drawerShiftBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 13,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 999,
-  },
-
-  drawerShiftBadgeActive: {
-    backgroundColor: "rgba(255,255,255,0.16)",
-  },
-
-  drawerShiftBadgeInactive: {
-    backgroundColor: "rgba(255,255,255,0.10)",
-  },
-
-  drawerShiftDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 7,
-  },
-
-  drawerShiftDotActive: {
-    backgroundColor: "#4ADE80",
-  },
-
-  drawerShiftDotInactive: {
-    backgroundColor: palette.light,
-  },
-
-  drawerShiftText: {
-    color: palette.white,
-    fontSize: 11,
-    fontWeight: "700",
-  },
-
-  filters: {
-    flexDirection: "row",
-    marginBottom: 15,
-    flexWrap: "wrap",
-    gap: 8,
-  },
-
-  filter: {
-    paddingHorizontal: 13,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: palette.muted,
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-
-  activeFilter: {
-    backgroundColor: palette.primary,
-    borderColor: palette.primary,
-  },
-
-  filterText: {
-    fontSize: 12,
-    fontWeight: "bold",
-    color: palette.text,
-  },
-
-  loadingBox: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  loadingText: {
-    marginTop: 10,
-    color: palette.textSecondary,
-    fontWeight: "bold",
-  },
-
-  emptyListBox: {
-    paddingVertical: 40,
-    alignItems: "center",
-  },
-
-  emptyListText: {
-    color: palette.gray,
-    fontWeight: "bold",
-  },
-
-  card: {
-    width: "48%",
-    padding: 15,
-    borderRadius: 22,
-    backgroundColor: palette.card,
-    borderWidth: 2,
-    marginBottom: 15,
-    elevation: 2,
-  },
-
-  dot: {
-    position: "absolute",
-    top: 11,
-    right: 11,
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-  },
-
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-
-  iconBox: {
-    padding: 10,
-    borderRadius: 15,
-  },
-
-  title: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: palette.text,
-  },
-
-  sub: {
-    fontSize: 11,
-    color: palette.gray,
-  },
-
-  clientBox: {
-    backgroundColor: palette.muted,
-    padding: 10,
-    borderRadius: 15,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-
-  clientLabel: {
-    fontSize: 10,
-    color: palette.gray,
-  },
-
-  client: {
-    fontWeight: "bold",
-    color: palette.text,
-  },
-
-  empty: {
-    marginTop: 10,
-    fontStyle: "italic",
-    color: palette.placeholder,
-  },
-
-  footer: {
-    marginTop: 10,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  total: {
-    fontWeight: "bold",
-    color: palette.accent,
-  },
-
-  time: {
-    color: palette.warning,
-    fontWeight: "600",
-  },
-
-  available: {
-    color: palette.success,
-    fontWeight: "bold",
-  },
-
-  orderText: {
-    color: palette.accent,
-    fontWeight: "bold",
-  },
-
-  editBtn: {
-    marginTop: 10,
-    backgroundColor: palette.infoBackground,
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: palette.light,
-  },
-
-  editText: {
-    color: palette.primary,
-    fontWeight: "bold",
-    fontSize: 12,
-  },
-
-  deleteBtn: {
-    marginTop: 10,
-    backgroundColor: palette.dangerBackground,
-    paddingVertical: 8,
-    borderRadius: 10,
-    alignItems: "center",
-  },
-
-  deleteBtnDisabled: {
-    backgroundColor: palette.muted,
-  },
-
-  deleteText: {
-    color: palette.danger,
-    fontWeight: "bold",
-    fontSize: 12,
-  },
-
-  deleteTextDisabled: {
-    color: palette.placeholder,
-  },
-
-  modalBackground: {
-    flex: 1,
-    backgroundColor: palette.overlay,
-  },
-
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-
-  drawer: {
-    width: "78%",
-    maxWidth: 330,
-    height: "100%",
-    backgroundColor: palette.background,
-    elevation: 12,
-  },
-
-  drawerHeader: {
-    backgroundColor: palette.dark,
-    alignItems: "center",
-    paddingTop: 48,
-    paddingBottom: 28,
-    paddingHorizontal: 18,
-    borderBottomWidth: 4,
-    borderBottomColor: palette.accent,
-  },
-
-  closeBtn: {
-    position: "absolute",
-    top: 18,
-    right: 16,
-    padding: 6,
-  },
-
-  avatar: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: palette.light,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12,
-    borderWidth: 3,
-    borderColor: palette.white,
-  },
-
-  avatarText: {
-    color: palette.dark,
-    fontSize: 31,
-    fontWeight: "bold",
-  },
-
-  drawerName: {
-    color: palette.white,
-    fontSize: 19,
-    fontWeight: "bold",
-  },
-
-  drawerEmail: {
-    color: palette.light,
-    fontSize: 13,
-    marginTop: 5,
-  },
-
-  drawerMenu: {
-    paddingHorizontal: 14,
-    paddingTop: 20,
-  },
-
-  drawerItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
-    backgroundColor: palette.surface,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderRadius: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: palette.border,
-  },
-
-  drawerItemActive: {
-    backgroundColor: palette.muted,
-    borderLeftWidth: 4,
-    borderLeftColor: palette.accent,
-  },
-
-  drawerItemText: {
-    color: palette.text,
-    fontSize: 15,
-    fontWeight: "bold",
-  },
-
-  drawerFooter: {
-    flex: 1,
-    justifyContent: "flex-end",
-    padding: 16,
-  },
-
-  logoutBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    backgroundColor: palette.dangerBackground,
-    paddingVertical: 14,
-    borderRadius: 14,
-  },
-
-  logoutText: {
-    color: palette.danger,
-    fontWeight: "bold",
-    fontSize: 15,
+    fontWeight: "900",
+    marginLeft: 7,
   },
 });
