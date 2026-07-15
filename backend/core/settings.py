@@ -59,6 +59,7 @@ INSTALLED_APPS = [
     'apps.tables',
     'apps.orders',
     'apps.cashier',
+    'apps.reports',
 ]
 
 MIDDLEWARE = [
@@ -96,7 +97,10 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [os.environ.get('REDIS_URL', 'redis://localhost:6379/0')],
+            "hosts": [{
+                "address": os.environ.get('REDIS_URL', 'redis://localhost:6379/0'),
+                "socket_timeout": None,
+            }],
         },
     },
 }
@@ -108,7 +112,7 @@ CHANNEL_LAYERS = {
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME', 'turestaurante_db'),
+        'NAME': os.environ.get('DB_NAME', 'nextorder_db'),
         'USER': os.environ.get('DB_USER', 'admin'),
         'PASSWORD': os.environ.get('DB_PASSWORD', 'adminpassword'),
         'HOST': os.environ.get('DB_HOST', 'localhost'),
@@ -178,14 +182,12 @@ SIMPLE_JWT = {
 
 # Configuración de la Documentación Swagger
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'TuRestaurante API',
-    'DESCRIPTION': 'Documentación interactiva de la API para el restaurante',
+    'TITLE': 'NextOrder API',
+    'DESCRIPTION': 'Documentación de la API de NextOrder',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
 }
 
 # Configuración de Seguridad para el Frontend
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-]
+CORS_ALLOW_ALL_ORIGINS = True

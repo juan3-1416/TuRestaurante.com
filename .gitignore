@@ -35,3 +35,12 @@ next-env.d.ts
 # python cache
 __pycache__
 *.pyc
+venv/
+.env
+
+# Android & React Native cache
+.gradle/
+*.iml
+local.properties
+.idea/
+.DS_Store

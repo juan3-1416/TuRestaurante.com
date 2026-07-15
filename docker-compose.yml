@@ -1,10 +1,10 @@
 services:
   db:
     image: postgres:15-alpine
-    container_name: turestaurante_db
+    container_name: nextorder_db
     restart: "no"
     environment:
-      POSTGRES_DB: ${DB_NAME:-turestaurante_db}
+      POSTGRES_DB: ${DB_NAME:-nextorder_db}
       POSTGRES_USER: ${DB_USER:-admin}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-adminpassword}
     volumes:
@@ -12,14 +12,14 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-turestaurante_db}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-nextorder_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:alpine
-    container_name: turestaurante_redis
+    container_name: nextorder_redis
     restart: "no"
     ports:
       - "6379:6379"
@@ -40,7 +40,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DB_NAME=${DB_NAME:-turestaurante_db}
+      - DB_NAME=${DB_NAME:-nextorder_db}
       - DB_USER=${DB_USER:-admin}
       - DB_PASSWORD=${DB_PASSWORD:-adminpassword}
       - DB_HOST=db

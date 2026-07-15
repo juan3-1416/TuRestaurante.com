@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuthStore, Role } from "@/store/authStore";
 
@@ -24,6 +24,11 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, user } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // 1. Verificar si la ruta actual está protegida y si el rol tiene acceso (durante el render)
   const hasAccess = (() => {
@@ -53,8 +58,8 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     }
   }, [hasAccess, isAuthenticated, user, router]);
 
-  // Mientras verifica o redirige, mostramos un pequeño estado de carga
-  if (!hasAccess) {
+  // Mientras verifica o redirige (o antes de montar en el cliente), mostramos un pequeño estado de carga
+  if (!isMounted || !hasAccess) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center gap-4">

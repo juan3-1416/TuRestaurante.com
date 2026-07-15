@@ -14,6 +14,7 @@ export interface ReceiptData {
   exchangeRate?: number;
   amountReceived?: number;
   changeBs?: number;
+  orderIds?: (string | number)[];
 }
 
 interface ReceiptModalProps {
@@ -66,7 +67,7 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
         >
           {/* Cabecera del Ticket */}
           <div className="text-center space-y-1 border-b-2 border-dashed border-gray-300 pb-4 mb-4">
-            <h2 className="text-2xl font-bold tracking-tighter">TU RESTAURANTE</h2>
+            <h2 className="text-2xl font-bold tracking-tighter">NEXTORDER</h2>
             <p className="text-xs">Av. Principal #123, Santa Cruz</p>
             <p className="text-xs">NIT: 123456789</p>
             <p className="text-xs mt-2 font-semibold">TICKET DE VENTA</p>
@@ -78,6 +79,9 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
             <div className="flex justify-between"><span>Mesa:</span> <span>{data.tableNumber}</span></div>
             <div className="flex justify-between"><span>Cajero:</span> <span>{data.cashierName}</span></div>
             <div className="flex justify-between"><span>Método:</span> <span>{data.method}</span></div>
+            {data.orderIds && data.orderIds.length > 0 && (
+              <div className="flex justify-between"><span>Orden(es):</span> <span>#{data.orderIds.join(", #")}</span></div>
+            )}
           </div>
 
           {/* Lista de Productos */}
