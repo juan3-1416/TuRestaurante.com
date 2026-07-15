@@ -129,15 +129,6 @@ export function ReportesDashboard() {
       {/* Tabla de Empleados */}
       <ResumenEmpleadosTable data={empleados} />
 
-      {/* Nota de datos mock */}
-      <div className="flex items-center gap-3 bg-amber-50/80 border border-amber-200 p-4 rounded-2xl text-xs text-amber-800 font-medium">
-        <RefreshCw size={14} className="shrink-0 text-amber-600" />
-        <span>
-          <strong>Datos de demostración:</strong> Los gráficos muestran datos simulados mientras el equipo de backend implementa los endpoints de reportes (
-          <code className="bg-amber-100 px-1 rounded">/api/reports/</code>).
-          La integración real solo requiere cambiar el hook <code className="bg-amber-100 px-1 rounded">useReportes.ts</code>.
-        </span>
-      </div>
 
     </div>
   )

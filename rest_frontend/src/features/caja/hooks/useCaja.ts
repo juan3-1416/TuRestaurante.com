@@ -113,6 +113,13 @@ export function useCaja() {
       return acc;
     }, [] as ReceiptData["items"]);
 
+    const orderIds: (number | string)[] = 
+      selectedTableForPayment.activeOrderIds && selectedTableForPayment.activeOrderIds.length > 0
+        ? selectedTableForPayment.activeOrderIds
+        : selectedTableForPayment.activeOrderId
+          ? [selectedTableForPayment.activeOrderId]
+          : [];
+
     const newReceipt: ReceiptData = {
       tableNumber: selectedTableForPayment.number,
       cashierName: cashierName,
@@ -123,7 +130,8 @@ export function useCaja() {
       currency: paymentCurrency,
       exchangeRate: exchangeRate,
       amountReceived: Number(amountReceived) || 0,
-      changeBs: changeBs
+      changeBs: changeBs,
+      orderIds: orderIds
     };
 
     await new Promise(resolve => setTimeout(resolve, 1000))
@@ -131,13 +139,7 @@ export function useCaja() {
     try {
       // Opción A: Pagar TODAS las órdenes activas de la mesa en una sola confirmación.
       // Usamos activeOrderIds si está disponible, con fallback a activeOrderId (1 sola orden).
-      const orderIds: (number | string)[] = 
-        selectedTableForPayment.activeOrderIds && selectedTableForPayment.activeOrderIds.length > 0
-          ? selectedTableForPayment.activeOrderIds
-          : selectedTableForPayment.activeOrderId
-            ? [selectedTableForPayment.activeOrderId]
-            : [];
-
+      
       if (orderIds.length === 0) {
         alert("No se encontró una orden activa para esta mesa. Verifica que se hayan enviado productos a cocina.");
         setIsProcessingPayment(false);
