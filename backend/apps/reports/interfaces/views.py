@@ -84,26 +84,30 @@ class ReportsAPIView(APIView):
         top_productos = []
         from django.db.models import DecimalField, ExpressionWrapper
         grouped_products = OrderItem.objects.filter(order__in=orders_paid).values('product__name').annotate(
-            quantity=Sum('quantity'), 
+            total_qty=Sum('quantity'), 
             total_income=Sum(ExpressionWrapper(F('price') * F('quantity'), output_field=DecimalField()))
-        ).order_by('-quantity')[:10]
+        ).order_by('-total_qty')[:10]
         
         for item in grouped_products:
             top_productos.append({
                 'name': item['product__name'],
-                'quantity': item['quantity'],
+                'quantity': item['total_qty'],
                 'total_income': float(item['total_income'])
             })
             
         # --- Métodos de Pago ---
         metodos_pago = []
-        grouped_payments = transactions_income.values('payment_method').annotate(count=Count('id'), total=Sum('amount'))
+        grouped_payments = transactions_income.values('payment_method', 'currency').annotate(count=Count('id'), total=Sum('amount'))
+        
+        payment_dict = {}
         for item in grouped_payments:
-            metodos_pago.append({
-                'method': item['payment_method'],
-                'count': item['count'],
-                'total': float(item['total'])
-            })
+            method_name = 'Dólares' if item['currency'] == 'USD' else item['payment_method']
+            if method_name not in payment_dict:
+                payment_dict[method_name] = {'count': 0, 'total': 0.0}
+            payment_dict[method_name]['count'] += item['count']
+            payment_dict[method_name]['total'] += float(item['total'])
+            
+        metodos_pago = [{'method': k, 'count': v['count'], 'total': v['total']} for k, v in payment_dict.items()]
             
         # --- Empleados ---
         empleados = []

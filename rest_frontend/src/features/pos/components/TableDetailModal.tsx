@@ -6,6 +6,7 @@ import { Table, OrderItem } from "@/store/posStore"
 import { TableStatusDetail } from "./TableStatusDetail"
 import { TableProductMenu, Product } from "./TableProductMenu"
 import { useTables } from "../hooks/useTables"
+import { generateId } from "@/lib/utils"
 
 interface TableDetailProps {
   table: Table | null
@@ -80,7 +81,7 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
       onClose()
     } else if (actionName === "Tomando orden" || actionName === "Agregar Nueva Orden") {
       setOrderMode("append")
-      setEditingTicketId(crypto.randomUUID())
+      setEditingTicketId(generateId())
       setSelectedProducts([])
       setViewMode("products")
     } else if (actionName.startsWith("Modificar Pedido")) {
@@ -106,8 +107,8 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
       
       // Mapeamos los productos del carrito
       const newMappedOrders = selectedProducts.map((p): OrderItem => ({
-        cartId: p.cartId || crypto.randomUUID(),
-        orderId: editingTicketId || crypto.randomUUID(),
+        cartId: p.cartId || generateId(),
+        orderId: editingTicketId || generateId(),
         productId: p.id,
         id: p.id,
         name: p.name,
