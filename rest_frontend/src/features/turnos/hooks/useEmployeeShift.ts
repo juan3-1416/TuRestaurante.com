@@ -24,6 +24,8 @@ export interface EmployeeShift {
   orders_charged?: number;
   tickets_generated?: number;
   walkout_observations?: string[];
+  walkouts_count?: number;
+  walkouts_amount?: number;
 }
 
 export function useEmployeeShift() {

@@ -2,9 +2,15 @@ from rest_framework import serializers
 from apps.cashier.infrastructure.models import CashShift, Transaction
 
 class TransactionSerializer(serializers.ModelSerializer):
+    cashier_name = serializers.SerializerMethodField()
+
     class Meta:
         model = Transaction
         fields = '__all__'
+
+    def get_cashier_name(self, obj):
+        user = obj.shift.user
+        return f"{user.first_name} {user.last_name}".strip() or user.username
 
 class CashShiftSerializer(serializers.ModelSerializer):
     transactions = TransactionSerializer(many=True, read_only=True)

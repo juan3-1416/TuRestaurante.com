@@ -1,6 +1,7 @@
 import { useState, useMemo, Dispatch, SetStateAction } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { apiClient } from "@/lib/axios"
+import { generateId } from "@/lib/utils"
 
 export interface ApiProduct {
   id: number;
@@ -52,7 +53,7 @@ export function useTableProductMenu({ selectedProducts, setSelectedProducts }: U
     }
     const newProductInstance = {
       ...product,
-      cartId: crypto.randomUUID() // Genera un ID único para esta unidad específica
+      cartId: generateId() // Genera un ID único para esta unidad específica
     };
     setSelectedProducts([...selectedProducts, newProductInstance]);
   }
