@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { generateId } from '@/lib/utils'
 
 // 1. Definición de Tipos
 export type TableStatus = "Libre" | "Ocupada" | "Reservada" | "Observada"
@@ -61,7 +62,7 @@ export const usePosStore = create<PosState>((set) => ({
   shiftInitialBalance: 0,
 
   addTransaction: (tx) => set((state) => ({
-    transactions: [{ ...tx, id: crypto.randomUUID() }, ...state.transactions]
+    transactions: [{ ...tx, id: generateId() }, ...state.transactions]
   })),
 
   toggleShift: (isOpen, initialBalance = 0) => set(() => ({

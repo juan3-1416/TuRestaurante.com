@@ -6,7 +6,7 @@ import { apiClient } from "@/lib/axios"
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-export type FiltroTiempo = "hoy" | "semana" | "mes" | "año"
+export type FiltroTiempo = "general" | "hoy" | "ayer" | "por_año" | "por_mes" | "por_dia"
 
 export interface ReporteSummary {
   ingresosTotales: number
@@ -46,7 +46,6 @@ export interface ResumenEmpleadoData {
   income: number
   tickets: number
   tables: number
-  hours: number
 }
 
 export interface ReporteData {
@@ -61,13 +60,21 @@ export interface ReporteData {
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useReportes() {
-  const [filtroTiempo, setFiltroTiempo] = useState<FiltroTiempo>("semana")
+  const [filtroTiempo, setFiltroTiempo] = useState<FiltroTiempo>("general")
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1)
+  const [selectedDay, setSelectedDay] = useState<number>(new Date().getDate())
 
   const { data, isLoading, error } = useQuery<ReporteData>({
-    queryKey: ["reportes", filtroTiempo],
+    queryKey: ["reportes", filtroTiempo, selectedYear, selectedMonth, selectedDay],
     queryFn: async () => {
       const response = await apiClient.get<ReporteData>("/reports/", {
-        params: { period: filtroTiempo },
+        params: { 
+            period: filtroTiempo,
+            year: selectedYear,
+            month: selectedMonth,
+            day: selectedDay
+        },
       })
       return response.data
     },
@@ -86,6 +93,12 @@ export function useReportes() {
   return {
     filtroTiempo,
     setFiltroTiempo,
+    selectedYear,
+    setSelectedYear,
+    selectedMonth,
+    setSelectedMonth,
+    selectedDay,
+    setSelectedDay,
     isLoading,
     error,
     ...(data || defaultData),

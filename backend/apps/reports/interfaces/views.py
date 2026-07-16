@@ -14,24 +14,65 @@ class ReportsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        period = request.query_params.get('period', 'hoy')
+        period = request.query_params.get('period', 'general')
+        year_param = request.query_params.get('year')
+        month_param = request.query_params.get('month')
+        day_param = request.query_params.get('day')
         
         now = timezone.now()
-        start_date = now
         
-        if period == 'hoy':
+        # Calculate start_date and end_date based on params
+        if period == 'general':
+            # Historical data
+            first_order = Order.objects.order_by('created_at').first()
+            if first_order:
+                start_date = first_order.created_at
+            else:
+                start_date = now - timezone.timedelta(days=730)
+            end_date = now
+            
+        elif period == 'hoy':
             start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        elif period == 'semana':
-            start_date = now - timezone.timedelta(days=now.weekday())
-            start_date = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
-        elif period == 'mes':
-            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        elif period == 'año':
-            start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            end_date = now
+            
+        elif period == 'ayer':
+            start_date = (now - timezone.timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = start_date.replace(hour=23, minute=59, second=59)
+            
+        elif period == 'por_año':
+            if year_param:
+                year = int(year_param)
+                start_date = now.replace(year=year, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+                end_date = start_date.replace(month=12, day=31, hour=23, minute=59, second=59)
+            else:
+                start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+                end_date = now
+                
+        elif period == 'por_mes':
+            if year_param and month_param:
+                year = int(year_param)
+                month = int(month_param)
+                import calendar
+                last_day = calendar.monthrange(year, month)[1]
+                start_date = now.replace(year=year, month=month, day=1, hour=0, minute=0, second=0, microsecond=0)
+                end_date = start_date.replace(day=last_day, hour=23, minute=59, second=59)
+            else:
+                start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                end_date = now
+                
+        elif period == 'por_dia':
+            if year_param and month_param and day_param:
+                year = int(year_param)
+                month = int(month_param)
+                day = int(day_param)
+                start_date = now.replace(year=year, month=month, day=day, hour=0, minute=0, second=0, microsecond=0)
+                end_date = start_date.replace(hour=23, minute=59, second=59)
+            else:
+                start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+                end_date = now
         else:
             start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            
-        end_date = now
+            end_date = now
 
         # Base querysets
         orders_paid = Order.objects.filter(status=OrderStatus.PAID, created_at__range=(start_date, end_date))
@@ -58,25 +99,29 @@ class ReportsAPIView(APIView):
         
         # --- Ingresos ---
         ingresos = []
-        if period == 'hoy':
-            grouped_income = transactions_income.annotate(hour=TruncHour('created_at')).values('hour').annotate(ingreso=Sum('amount'), tickets=Count('id')).order_by('hour')
+        tz = timezone.get_current_timezone()
+        if period in ['hoy', 'ayer', 'por_dia']:
+            grouped_income = transactions_income.annotate(hour=TruncHour('created_at', tzinfo=tz)).values('hour').annotate(ingreso=Sum('amount'), tickets=Count('id')).order_by('hour')
             for item in grouped_income:
-                hour_label = item['hour'].strftime('%H:00')
+                hour_label = item['hour'].astimezone(tz).strftime('%H:00')
                 ingresos.append({'label': hour_label, 'ingreso': float(item['ingreso']), 'tickets': item['tickets']})
-        elif period == 'semana' or period == 'mes':
-            grouped_income = transactions_income.annotate(day=TruncDay('created_at')).values('day').annotate(ingreso=Sum('amount'), tickets=Count('id')).order_by('day')
+                
+        elif period == 'por_mes':
+            grouped_income = transactions_income.annotate(day=TruncDay('created_at', tzinfo=tz)).values('day').annotate(ingreso=Sum('amount'), tickets=Count('id')).order_by('day')
             for item in grouped_income:
-                day_label = item['day'].strftime('%d %b') if period == 'mes' else item['day'].strftime('%a')
+                day_label = item['day'].astimezone(tz).strftime('%d %b')
                 ingresos.append({'label': day_label, 'ingreso': float(item['ingreso']), 'tickets': item['tickets']})
-        elif period == 'año':
-            grouped_income = transactions_income.annotate(month=TruncMonth('created_at')).values('month').annotate(ingreso=Sum('amount'), tickets=Count('id')).order_by('month')
+                
+        elif period in ['general', 'por_año']:
+            grouped_income = transactions_income.annotate(month=TruncMonth('created_at', tzinfo=tz)).values('month').annotate(ingreso=Sum('amount'), tickets=Count('id')).order_by('month')
             for item in grouped_income:
-                month_label = item['month'].strftime('%b')
+                month_label = item['month'].astimezone(tz).strftime('%b %Y') if period == 'general' else item['month'].astimezone(tz).strftime('%b')
                 ingresos.append({'label': month_label, 'ingreso': float(item['ingreso']), 'tickets': item['tickets']})
                 
         # --- Horas Pico ---
         horas_pico = []
-        grouped_orders = orders_paid.annotate(hour=ExtractHour('created_at')).values('hour').annotate(ordenes=Count('id')).order_by('hour')
+        tz = timezone.get_current_timezone()
+        grouped_orders = orders_paid.annotate(hour=ExtractHour('created_at', tzinfo=tz)).values('hour').annotate(ordenes=Count('id')).order_by('hour')
         for item in grouped_orders:
             horas_pico.append({'hora': f"{item['hour']:02d}:00", 'ordenes': item['ordenes']})
             
@@ -84,26 +129,30 @@ class ReportsAPIView(APIView):
         top_productos = []
         from django.db.models import DecimalField, ExpressionWrapper
         grouped_products = OrderItem.objects.filter(order__in=orders_paid).values('product__name').annotate(
-            quantity=Sum('quantity'), 
+            total_qty=Sum('quantity'), 
             total_income=Sum(ExpressionWrapper(F('price') * F('quantity'), output_field=DecimalField()))
-        ).order_by('-quantity')[:10]
+        ).order_by('-total_qty')[:10]
         
         for item in grouped_products:
             top_productos.append({
                 'name': item['product__name'],
-                'quantity': item['quantity'],
+                'quantity': item['total_qty'],
                 'total_income': float(item['total_income'])
             })
             
         # --- Métodos de Pago ---
         metodos_pago = []
-        grouped_payments = transactions_income.values('payment_method').annotate(count=Count('id'), total=Sum('amount'))
+        grouped_payments = transactions_income.values('payment_method', 'currency').annotate(count=Count('id'), total=Sum('amount'))
+        
+        payment_dict = {}
         for item in grouped_payments:
-            metodos_pago.append({
-                'method': item['payment_method'],
-                'count': item['count'],
-                'total': float(item['total'])
-            })
+            method_name = 'Dólares' if item['currency'] == 'USD' else item['payment_method']
+            if method_name not in payment_dict:
+                payment_dict[method_name] = {'count': 0, 'total': 0.0}
+            payment_dict[method_name]['count'] += item['count']
+            payment_dict[method_name]['total'] += float(item['total'])
+            
+        metodos_pago = [{'method': k, 'count': v['count'], 'total': v['total']} for k, v in payment_dict.items()]
             
         # --- Empleados ---
         empleados = []
@@ -120,22 +169,12 @@ class ReportsAPIView(APIView):
             waiter_id = item['waiter__id']
             name = f"{item['waiter__first_name']} {item['waiter__last_name']}".strip() or item['waiter__username']
             
-            # Calcular horas trabajadas en el periodo
-            waiter_shifts = employee_shifts.filter(user_id=waiter_id)
-            total_seconds = 0
-            for shift in waiter_shifts:
-                end = shift.end_time or now
-                total_seconds += (end - shift.start_time).total_seconds()
-            
-            hours = round(total_seconds / 3600, 1)
-            
             empleados.append({
                 'name': name,
                 'role': item['waiter__role'],
                 'income': float(item['income']),
                 'tickets': item['tickets'],
-                'tables': item['tables'],
-                'hours': hours
+                'tables': item['tables']
             })
             
         return Response({
