@@ -15,7 +15,7 @@ export function useCaja() {
   const exchangeRate = useExchangeRate()
 
   const { tables, refetch: refetchTables, resolveWalkout } = useTables()
-  const { shift, isShiftOpen, refetch: refetchShift, registerIncome } = useShift()
+  const { shift, isShiftOpen, refetch: refetchShift, registerIncome, registerExpense } = useShift()
 
   const shiftInitialBalance = shift ? Number(shift.initial_balance) : 0
   const transactions = shift?.transactions || []
@@ -70,15 +70,15 @@ export function useCaja() {
     try {
       await resolveWalkout.mutateAsync(selectedTableForPayment.id)
       
-      // Registrar la fuga como un ingreso esperado que no se recibió (así suma al Total Esperado)
+      // Registrar la fuga como un egreso esperado (pérdida que se descuenta al mesero)
       try {
         const obsText = selectedTableForPayment.observationNote ? ` (${selectedTableForPayment.observationNote})` : ""
-        await registerIncome.mutateAsync({
+        await registerExpense.mutateAsync({
           amount: tableTotalBs,
-          description: `Fuga - Mesa ${selectedTableForPayment.number}${obsText}`
+          description: `Fuga / Pérdida - Mesa ${selectedTableForPayment.number}${obsText}`
         })
       } catch (incomeError) {
-        console.warn("Backend no soporta registro manual de ingresos para la fuga.", incomeError)
+        console.warn("Backend no soporta registro manual de egresos para la fuga.", incomeError)
       }
 
       await Promise.all([refetchTables(), refetchShift()])
