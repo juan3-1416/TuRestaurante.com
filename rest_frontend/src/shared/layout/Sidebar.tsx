@@ -50,11 +50,26 @@ export function Sidebar() {
     user?.role && item.roles.map(r => r.toLowerCase()).includes(user.role.toLowerCase())
   )
 
+  // Determinar color de fondo según el rol para diferenciarlos visualmente
+  const getRoleColors = () => {
+    if (!user?.role) return "bg-restaurante-oscuro/95 border-white/10 shadow-2xl"
+    
+    switch (user.role.toUpperCase()) {
+      case "CASHIER":
+        return "bg-emerald-950/95 border-emerald-500/20 shadow-emerald-900/40 shadow-2xl"
+      case "WAITER":
+        return "bg-amber-950/95 border-amber-500/20 shadow-amber-900/40 shadow-2xl"
+      case "ADMIN":
+      default:
+        return "bg-restaurante-oscuro/95 border-white/10 shadow-2xl"
+    }
+  }
+
   if (!mounted) return null // Evita mostrar la versión SSR sin datos locales
 
   return (
     <aside 
-      className={`relative h-[calc(100vh-2rem)] my-4 ml-4 transition-all duration-300 ease-in-out flex flex-col bg-restaurante-oscuro/95 backdrop-blur-xl border border-white/10 rounded-[2.5rem] shadow-2xl ${
+      className={`relative h-[calc(100vh-2rem)] my-4 ml-4 transition-all duration-300 ease-in-out flex flex-col backdrop-blur-xl rounded-[2.5rem] ${getRoleColors()} ${
         isCollapsed ? "w-[88px]" : "w-[280px]"
       }`}
     >
