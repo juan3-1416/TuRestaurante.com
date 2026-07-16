@@ -67,23 +67,47 @@ export default function MesasScreen({ navigation }) {
   const [userName, setUserName] = useState("Administrador");
   const [userEmail, setUserEmail] = useState("Sesión activa");
 
+  const [modalCrearMesaVisible, setModalCrearMesaVisible] =
+    useState(false);
+  const [numeroMesaNueva, setNumeroMesaNueva] = useState("");
+  const [capacidadMesaNueva, setCapacidadMesaNueva] =
+    useState("4");
+  const [guardandoMesa, setGuardandoMesa] = useState(false);
+
+  const [modalCapacidadVisible, setModalCapacidadVisible] =
+    useState(false);
+  const [mesaEditando, setMesaEditando] = useState(null);
+  const [capacidadEditando, setCapacidadEditando] = useState("");
+  const [guardandoCapacidad, setGuardandoCapacidad] =
+    useState(false);
+
   const [turnoActivo, setTurnoActivo] = useState(false);
   const [turnoActual, setTurnoActual] = useState(null);
   const [cargandoTurno, setCargandoTurno] = useState(true);
   const [procesandoTurno, setProcesandoTurno] = useState(false);
-  const [modalCerrarTurnoVisible, setModalCerrarTurnoVisible] = useState(false);
-  const [observacionesTurno, setObservacionesTurno] = useState("");
-
-  // WebSocket Integration
-  const onWebSocketUpdate = useCallback(() => {
-    console.log("[MesasScreen] Ping recibido. Recargando mesas...");
-    refrescarPantalla();
-  }, []);
-  
-  useTableWebSocket(onWebSocketUpdate);
+  const [modalCerrarTurnoVisible, setModalCerrarTurnoVisible] =
+    useState(false);
+  const [observacionesTurno, setObservacionesTurno] =
+    useState("");
 
   const getTableNumber = (mesa) => {
-    return mesa?.table_number ?? mesa?.number ?? "";
+    const numeroDirecto =
+      mesa?.table_number ?? mesa?.number;
+
+    if (
+      numeroDirecto !== null &&
+      numeroDirecto !== undefined &&
+      String(numeroDirecto).trim() !== ""
+    ) {
+      return String(numeroDirecto).trim();
+    }
+
+    const nombreMesa =
+      mesa?.name ?? mesa?.table_name ?? "";
+
+    const coincidencia = String(nombreMesa).match(/\d+/);
+
+    return coincidencia ? coincidencia[0] : "";
   };
 
   const getAuthHeaders = async () => {
@@ -102,7 +126,7 @@ export default function MesasScreen({ navigation }) {
   const normalizarMesas = (data) => {
     const lista = Array.isArray(data) ? data : data?.results || [];
 
-    return lista.sort((a, b) => {
+    return [...lista].sort((a, b) => {
       const numA = Number(getTableNumber(a));
       const numB = Number(getTableNumber(b));
 
@@ -113,180 +137,202 @@ export default function MesasScreen({ navigation }) {
     });
   };
 
-const obtenerUserIdDesdeToken = (token) => {
-  try {
-    if (!token) {
-      return "";
-    }
-
-    const partes = token.split(".");
-
-    if (partes.length < 2) {
-      return "";
-    }
-
-    let base64 = partes[1]
-      .replace(/-/g, "+")
-      .replace(/_/g, "/");
-
-    while (base64.length % 4) {
-      base64 += "=";
-    }
-
-    if (!global.atob) {
-      return "";
-    }
-
-    const payload = JSON.parse(global.atob(base64));
-
-    return payload?.user_id
-      ? String(payload.user_id)
-      : "";
-  } catch (error) {
-    console.log("Error leyendo user_id del token:", error);
-    return "";
-  }
-};
-
-const normalizarListaUsuarios = (data) => {
-  if (Array.isArray(data)) {
-    return data;
-  }
-
-  if (Array.isArray(data?.results)) {
-    return data.results;
-  }
-
-  return [];
-};
-
-const cargarPerfil = async () => {
-  try {
-    const token = await AsyncStorage.getItem("accessToken");
-    const nombreGuardado = await AsyncStorage.getItem("userName");
-    const correoGuardado = await AsyncStorage.getItem("userEmail");
-    const loginUsername = await AsyncStorage.getItem("loginUsername");
-    const userIdGuardado = await AsyncStorage.getItem("userId");
-
-    setUserName(nombreGuardado || loginUsername || "Administrador");
-    setUserEmail(correoGuardado || "Sesión activa");
-
-    if (!token) {
-      return;
-    }
-
-    if (
-      nombreGuardado &&
-      nombreGuardado !== "admin" &&
-      nombreGuardado !== "Administrador" &&
-      correoGuardado &&
-      correoGuardado !== "Sesión activa"
-    ) {
-      return;
-    }
-
-    const userIdToken = obtenerUserIdDesdeToken(token);
-    const userIdActual = userIdGuardado || userIdToken;
-
-    if (userIdActual && !userIdGuardado) {
-      await AsyncStorage.setItem("userId", String(userIdActual));
-    }
-
-    const response = await fetch(USERS_URL, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    const text = await response.text();
-
-    console.log("STATUS USUARIOS DRAWER MESAS:", response.status);
-    console.log("RESPUESTA USUARIOS DRAWER MESAS:", text);
-
-    let data;
-
+  const obtenerUserIdDesdeToken = (token) => {
     try {
-      data = JSON.parse(text);
+      if (!token) {
+        return "";
+      }
+
+      const partes = token.split(".");
+
+      if (partes.length < 2) {
+        return "";
+      }
+
+      let base64 = partes[1]
+        .replace(/-/g, "+")
+        .replace(/_/g, "/");
+
+      while (base64.length % 4) {
+        base64 += "=";
+      }
+
+      if (!global.atob) {
+        return "";
+      }
+
+      const payload = JSON.parse(global.atob(base64));
+
+      return payload?.user_id ? String(payload.user_id) : "";
     } catch (error) {
-      throw new Error(
-        `El servidor no devolvió JSON. Estado: ${response.status}. Respuesta: ${text}`
+      console.log("Error leyendo user_id del token:", error);
+      return "";
+    }
+  };
+
+  const normalizarListaUsuarios = (data) => {
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    if (Array.isArray(data?.results)) {
+      return data.results;
+    }
+
+    return [];
+  };
+
+  const cargarPerfil = async () => {
+    try {
+      const token = await AsyncStorage.getItem("accessToken");
+      const nombreGuardado = await AsyncStorage.getItem("userName");
+      const correoGuardado = await AsyncStorage.getItem("userEmail");
+      const loginUsername = await AsyncStorage.getItem(
+        "loginUsername"
       );
-    }
+      const userIdGuardado = await AsyncStorage.getItem("userId");
 
-    if (!response.ok) {
-      throw new Error(JSON.stringify(data));
-    }
-
-    const usuarios = normalizarListaUsuarios(data);
-
-    const usuarioActual = usuarios.find((usuario) => {
-      const coincidePorId =
-        userIdActual &&
-        String(usuario.id ?? "") === String(userIdActual);
-
-      const coincidePorUsername =
-        loginUsername &&
-        String(usuario.username || "").toLowerCase() ===
-          String(loginUsername).toLowerCase();
-
-      const coincidePorEmail =
-        loginUsername &&
-        String(usuario.email || "").toLowerCase() ===
-          String(loginUsername).toLowerCase();
-
-      return (
-        coincidePorId ||
-        coincidePorUsername ||
-        coincidePorEmail
+      setUserName(
+        nombreGuardado || loginUsername || "Administrador"
       );
-    });
+      setUserEmail(correoGuardado || "Sesión activa");
 
-    if (!usuarioActual) {
-      return;
-    }
+      if (!token) {
+        return;
+      }
 
-    const nombreCompleto =
-      `${usuarioActual.first_name || ""} ${usuarioActual.last_name || ""}`.trim() ||
-      usuarioActual.username ||
-      nombreGuardado ||
-      loginUsername ||
-      "Usuario";
+      if (
+        nombreGuardado &&
+        nombreGuardado !== "admin" &&
+        nombreGuardado !== "Administrador" &&
+        correoGuardado &&
+        correoGuardado !== "Sesión activa"
+      ) {
+        return;
+      }
 
-    const emailUsuario =
-      usuarioActual.email ||
-      correoGuardado ||
-      "Sesión activa";
+      const userIdToken = obtenerUserIdDesdeToken(token);
+      const userIdActual = userIdGuardado || userIdToken;
 
-    await AsyncStorage.multiSet([
-      ["userId", String(usuarioActual.id ?? userIdActual ?? "")],
-      [
-        "loginUsername",
-        usuarioActual.username || loginUsername || "",
-      ],
-      ["userName", nombreCompleto],
-      ["userEmail", emailUsuario],
-      ["userRole", usuarioActual.role || ""],
-    ]);
+      if (userIdActual && !userIdGuardado) {
+        await AsyncStorage.setItem(
+          "userId",
+          String(userIdActual)
+        );
+      }
 
-    setUserName(nombreCompleto);
-    setUserEmail(emailUsuario);
-  } catch (error) {
-    console.log("Error cargando perfil:", error);
+      const response = await fetch(USERS_URL, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
-    const nombreGuardado = await AsyncStorage.getItem("userName");
-    const correoGuardado = await AsyncStorage.getItem("userEmail");
-    const loginUsername = await AsyncStorage.getItem("loginUsername");
+      const text = await response.text();
 
-    setUserName(
-      nombreGuardado ||
+      console.log(
+        "STATUS USUARIOS DRAWER MESAS:",
+        response.status
+      );
+      console.log(
+        "RESPUESTA USUARIOS DRAWER MESAS:",
+        text
+      );
+
+      let data;
+
+      try {
+        data = JSON.parse(text);
+      } catch (error) {
+        throw new Error(
+          `El servidor no devolvió JSON. Estado: ${response.status}. Respuesta: ${text}`
+        );
+      }
+
+      if (!response.ok) {
+        throw new Error(JSON.stringify(data));
+      }
+
+      const usuarios = normalizarListaUsuarios(data);
+
+      const usuarioActual = usuarios.find((usuario) => {
+        const coincidePorId =
+          userIdActual &&
+          String(usuario.id ?? "") === String(userIdActual);
+
+        const coincidePorUsername =
+          loginUsername &&
+          String(usuario.username || "").toLowerCase() ===
+            String(loginUsername).toLowerCase();
+
+        const coincidePorEmail =
+          loginUsername &&
+          String(usuario.email || "").toLowerCase() ===
+            String(loginUsername).toLowerCase();
+
+        return (
+          coincidePorId ||
+          coincidePorUsername ||
+          coincidePorEmail
+        );
+      });
+
+      if (!usuarioActual) {
+        return;
+      }
+
+      const nombreCompleto =
+        `${usuarioActual.first_name || ""} ${
+          usuarioActual.last_name || ""
+        }`.trim() ||
+        usuarioActual.username ||
+        nombreGuardado ||
         loginUsername ||
-        "Administrador"
-    );
-    setUserEmail(correoGuardado || "Sesión activa");
-  }
-};
+        "Usuario";
+
+      const emailUsuario =
+        usuarioActual.email ||
+        correoGuardado ||
+        "Sesión activa";
+
+      await AsyncStorage.multiSet([
+        [
+          "userId",
+          String(usuarioActual.id ?? userIdActual ?? ""),
+        ],
+        [
+          "loginUsername",
+          usuarioActual.username || loginUsername || "",
+        ],
+        ["userName", nombreCompleto],
+        ["userEmail", emailUsuario],
+        ["userRole", usuarioActual.role || ""],
+      ]);
+
+      setUserName(nombreCompleto);
+      setUserEmail(emailUsuario);
+    } catch (error) {
+      console.log("Error cargando perfil:", error);
+
+      const nombreGuardado = await AsyncStorage.getItem(
+        "userName"
+      );
+      const correoGuardado = await AsyncStorage.getItem(
+        "userEmail"
+      );
+      const loginUsername = await AsyncStorage.getItem(
+        "loginUsername"
+      );
+
+      setUserName(
+        nombreGuardado ||
+          loginUsername ||
+          "Administrador"
+      );
+      setUserEmail(correoGuardado || "Sesión activa");
+    }
+  };
 
   const normalizarTurnos = (data) => {
     if (Array.isArray(data)) {
@@ -299,7 +345,6 @@ const cargarPerfil = async () => {
 
     return [];
   };
-
 
   const obtenerPropietarioTurno = (turno) => {
     const candidato =
@@ -389,7 +434,10 @@ const cargarPerfil = async () => {
     }
   };
 
-  const obtenerMensajeBackend = (data, mensajeDefault) => {
+  const obtenerMensajeBackend = (
+    data,
+    mensajeDefault
+  ) => {
     if (typeof data === "string" && data.trim()) {
       return data;
     }
@@ -409,7 +457,10 @@ const cargarPerfil = async () => {
     if (data && typeof data === "object") {
       const primerValor = Object.values(data)[0];
 
-      if (Array.isArray(primerValor) && primerValor.length > 0) {
+      if (
+        Array.isArray(primerValor) &&
+        primerValor.length > 0
+      ) {
         return String(primerValor[0]);
       }
 
@@ -435,7 +486,9 @@ const cargarPerfil = async () => {
     return fecha.toLocaleString();
   };
 
-  const cargarEstadoTurno = async (mostrarCarga = true) => {
+  const cargarEstadoTurno = async (
+    mostrarCarga = true
+  ) => {
     const tokenConsulta = await AsyncStorage.getItem(
       "accessToken"
     );
@@ -445,17 +498,17 @@ const cargarPerfil = async () => {
         setCargandoTurno(true);
       }
 
-      // Evita mostrar temporalmente el turno del usuario anterior.
       setTurnoActivo(false);
       setTurnoActual(null);
 
       if (!tokenConsulta) {
-        throw new Error("No existe token de autenticación");
+        throw new Error(
+          "No existe token de autenticación"
+        );
       }
 
-      const userIdGuardado = await AsyncStorage.getItem(
-        "userId"
-      );
+      const userIdGuardado =
+        await AsyncStorage.getItem("userId");
 
       const userIdToken =
         obtenerUserIdDesdeToken(tokenConsulta);
@@ -463,9 +516,8 @@ const cargarPerfil = async () => {
       const userIdActual =
         userIdGuardado || userIdToken;
 
-      const loginUsername = await AsyncStorage.getItem(
-        "loginUsername"
-      );
+      const loginUsername =
+        await AsyncStorage.getItem("loginUsername");
 
       if (!userIdActual && !loginUsername) {
         throw new Error(
@@ -501,11 +553,8 @@ const cargarPerfil = async () => {
         );
       }
 
-      // Si el usuario cambió durante la petición, se ignora
-      // completamente la respuesta del token anterior.
-      const tokenActual = await AsyncStorage.getItem(
-        "accessToken"
-      );
+      const tokenActual =
+        await AsyncStorage.getItem("accessToken");
 
       if (tokenActual !== tokenConsulta) {
         console.log(
@@ -522,9 +571,10 @@ const cargarPerfil = async () => {
             obtenerPropietarioTurno(turno);
 
           return (
-            propietario.id !== null &&
-            propietario.id !== undefined
-          ) || Boolean(propietario.username);
+            (propietario.id !== null &&
+              propietario.id !== undefined) ||
+            Boolean(propietario.username)
+          );
         });
 
       const turnosDelUsuario =
@@ -549,19 +599,19 @@ const cargarPerfil = async () => {
         );
       }
 
-      const turnosOrdenados = [...turnosDelUsuario].sort(
-        (a, b) => {
-          const fechaA = new Date(
-            a?.start_time || a?.created_at || 0
-          ).getTime();
+      const turnosOrdenados = [
+        ...turnosDelUsuario,
+      ].sort((a, b) => {
+        const fechaA = new Date(
+          a?.start_time || a?.created_at || 0
+        ).getTime();
 
-          const fechaB = new Date(
-            b?.start_time || b?.created_at || 0
-          ).getTime();
+        const fechaB = new Date(
+          b?.start_time || b?.created_at || 0
+        ).getTime();
 
-          return fechaB - fechaA;
-        }
-      );
+        return fechaB - fechaA;
+      });
 
       const turnoAbierto =
         turnosOrdenados.find(
@@ -592,13 +642,11 @@ const cargarPerfil = async () => {
       setTurnoActual(ultimoTurno);
     } catch (error) {
       console.log("Error consultando turno:", error);
-
       setTurnoActivo(false);
       setTurnoActual(null);
     } finally {
-      const tokenActual = await AsyncStorage.getItem(
-        "accessToken"
-      );
+      const tokenActual =
+        await AsyncStorage.getItem("accessToken");
 
       if (tokenActual === tokenConsulta) {
         setCargandoTurno(false);
@@ -627,10 +675,13 @@ const cargarPerfil = async () => {
 
               const headers = await getAuthHeaders();
 
-              const response = await fetch(SHIFT_START_URL, {
-                method: "POST",
-                headers,
-              });
+              const response = await fetch(
+                SHIFT_START_URL,
+                {
+                  method: "POST",
+                  headers,
+                }
+              );
 
               const data = await parseJsonSeguro(
                 response,
@@ -660,7 +711,10 @@ const cargarPerfil = async () => {
 
               await cargarEstadoTurno(false);
             } catch (error) {
-              console.log("Error iniciando turno:", error);
+              console.log(
+                "Error iniciando turno:",
+                error
+              );
 
               Alert.alert(
                 "No se pudo iniciar",
@@ -705,7 +759,8 @@ const cargarPerfil = async () => {
       setProcesandoTurno(true);
 
       const headers = await getAuthHeaders();
-      const observaciones = observacionesTurno.trim();
+      const observaciones =
+        observacionesTurno.trim();
 
       const opciones = {
         method: "POST",
@@ -763,24 +818,21 @@ const cargarPerfil = async () => {
     }
   };
 
-  const refrescarPantalla = async () => {
-    await Promise.all([
-      cargarMesas(),
-      cargarEstadoTurno(false),
-    ]);
-  };
-
   const cargarMesas = async () => {
     try {
       setLoading(true);
 
       const headers = await getAuthHeaders();
 
-      console.log("========== CARGAR MESAS ==========");
+      console.log(
+        "========== CARGAR MESAS =========="
+      );
       console.log("URL MESAS:", API_URL);
       console.log("HEADERS MESAS:", {
         ...headers,
-        Authorization: headers.Authorization ? "Bearer TOKEN_EXISTE" : "SIN TOKEN",
+        Authorization: headers.Authorization
+          ? "Bearer TOKEN_EXISTE"
+          : "SIN TOKEN",
       });
 
       const response = await fetch(API_URL, {
@@ -792,7 +844,9 @@ const cargarPerfil = async () => {
 
       console.log("STATUS MESAS:", response.status);
       console.log("RESPUESTA MESAS:", text);
-      console.log("==================================");
+      console.log(
+        "=================================="
+      );
 
       let data;
 
@@ -808,9 +862,7 @@ const cargarPerfil = async () => {
         throw new Error(JSON.stringify(data));
       }
 
-      const mesasOrdenadas = normalizarMesas(data);
-
-      setTables(mesasOrdenadas);
+      setTables(normalizarMesas(data));
     } catch (error) {
       console.log("Error al cargar mesas:", error);
 
@@ -822,13 +874,30 @@ const cargarPerfil = async () => {
       setLoading(false);
     }
   };
-useFocusEffect(
-  useCallback(() => {
-    cargarPerfil();
-    cargarMesas();
-    cargarEstadoTurno();
-  }, [])
-);
+
+  const refrescarPantalla = async () => {
+    await Promise.all([
+      cargarMesas(),
+      cargarEstadoTurno(false),
+    ]);
+  };
+
+  const onWebSocketUpdate = useCallback(() => {
+    console.log(
+      "[MesasScreen] Ping recibido. Recargando mesas..."
+    );
+    refrescarPantalla();
+  }, []);
+
+  useTableWebSocket(onWebSocketUpdate);
+
+  useFocusEffect(
+    useCallback(() => {
+      cargarPerfil();
+      cargarMesas();
+      cargarEstadoTurno();
+    }, [])
+  );
 
   const irPedidosPendientes = () => {
     setMenuVisible(false);
@@ -854,15 +923,15 @@ useFocusEffect(
           style: "destructive",
           onPress: async () => {
             try {
-await AsyncStorage.multiRemove([
-  "accessToken",
-  "refreshToken",
-  "userId",
-  "userName",
-  "userEmail",
-  "userRole",
-  "loginUsername",
-]);
+              await AsyncStorage.multiRemove([
+                "accessToken",
+                "refreshToken",
+                "userId",
+                "userName",
+                "userEmail",
+                "userRole",
+                "loginUsername",
+              ]);
 
               setTurnoActivo(false);
               setTurnoActual(null);
@@ -870,6 +939,13 @@ await AsyncStorage.multiRemove([
               setProcesandoTurno(false);
               setModalCerrarTurnoVisible(false);
               setObservacionesTurno("");
+              setModalCrearMesaVisible(false);
+              setNumeroMesaNueva("");
+              setCapacidadMesaNueva("4");
+              setGuardandoMesa(false);
+              setModalCapacidadVisible(false);
+              setMesaEditando(null);
+              setCapacidadEditando("");
               setMenuVisible(false);
 
               navigation.reset({
@@ -877,7 +953,10 @@ await AsyncStorage.multiRemove([
                 routes: [{ name: "Login" }],
               });
             } catch (error) {
-              console.log("Error cerrando sesión:", error);
+              console.log(
+                "Error cerrando sesión:",
+                error
+              );
             }
           },
         },
@@ -885,28 +964,36 @@ await AsyncStorage.multiRemove([
     );
   };
 
-  const updateTableCapacity = async (tableId, newCapacity) => {
+  const updateTableCapacity = async (
+    tableId,
+    newCapacity
+  ) => {
     try {
       const headers = await getAuthHeaders();
 
-      const response = await fetch(`${API_URL}${tableId}/`, {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify({
-          capacity: Number(newCapacity),
-        }),
-      });
+      const response = await fetch(
+        `${API_URL}${tableId}/`,
+        {
+          method: "PATCH",
+          headers,
+          body: JSON.stringify({
+            capacity: Number(newCapacity),
+          }),
+        }
+      );
 
       const text = await response.text();
 
-      let data;
+      let data = {};
 
-      try {
-        data = JSON.parse(text);
-      } catch (error) {
-        throw new Error(
-          `El servidor no devolvió JSON. Estado: ${response.status}. Respuesta: ${text}`
-        );
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch (error) {
+          throw new Error(
+            `El servidor no devolvió JSON. Estado: ${response.status}. Respuesta: ${text}`
+          );
+        }
       }
 
       if (!response.ok) {
@@ -916,36 +1003,185 @@ await AsyncStorage.multiRemove([
       setTables((prevTables) =>
         prevTables.map((mesa) =>
           mesa.id === tableId
-            ? { ...mesa, capacity: Number(newCapacity) }
+            ? {
+                ...mesa,
+                ...data,
+                capacity: Number(newCapacity),
+              }
             : mesa
         )
       );
+
+      return true;
     } catch (error) {
-      console.log("Error editando capacidad:", error);
-      Alert.alert("Error", "No se pudo modificar la capacidad de la mesa.");
+      console.log(
+        "Error editando capacidad:",
+        error
+      );
+
+      Alert.alert(
+        "Error",
+        "No se pudo modificar la capacidad de la mesa."
+      );
+
+      return false;
     }
   };
 
-  const crearMesa = async () => {
+  const abrirEditarCapacidad = (mesa) => {
+    setMesaEditando(mesa);
+    setCapacidadEditando(
+      String(mesa?.capacity ?? 1)
+    );
+    setModalCapacidadVisible(true);
+  };
+
+  const cerrarModalCapacidad = () => {
+    if (guardandoCapacidad) {
+      return;
+    }
+
+    setModalCapacidadVisible(false);
+    setMesaEditando(null);
+    setCapacidadEditando("");
+  };
+
+  const guardarCapacidad = async () => {
+    const nuevaCapacidad = Number(
+      capacidadEditando.trim()
+    );
+
+    if (
+      !Number.isInteger(nuevaCapacidad) ||
+      nuevaCapacidad < 1
+    ) {
+      Alert.alert(
+        "Capacidad incorrecta",
+        "Ingresa una capacidad válida mayor a cero."
+      );
+      return;
+    }
+
+    if (!mesaEditando?.id) {
+      return;
+    }
+
     try {
+      setGuardandoCapacidad(true);
+
+      const actualizado =
+        await updateTableCapacity(
+          mesaEditando.id,
+          nuevaCapacidad
+        );
+
+      if (actualizado) {
+        setModalCapacidadVisible(false);
+        setMesaEditando(null);
+        setCapacidadEditando("");
+      }
+    } finally {
+      setGuardandoCapacidad(false);
+    }
+  };
+
+  const abrirModalCrearMesa = () => {
+    const numerosExistentes = tables
+      .map((mesa) => Number(getTableNumber(mesa)))
+      .filter(
+        (numero) =>
+          Number.isInteger(numero) && numero > 0
+      );
+
+    const siguienteNumero =
+      numerosExistentes.length > 0
+        ? Math.max(...numerosExistentes) + 1
+        : 1;
+
+    setNumeroMesaNueva(String(siguienteNumero));
+    setCapacidadMesaNueva("4");
+    setModalCrearMesaVisible(true);
+  };
+
+  const cerrarModalCrearMesa = () => {
+    if (guardandoMesa) {
+      return;
+    }
+
+    setModalCrearMesaVisible(false);
+    setNumeroMesaNueva("");
+    setCapacidadMesaNueva("4");
+  };
+
+  const crearMesa = async () => {
+    const numeroNormalizado =
+      numeroMesaNueva.trim();
+
+    const numeroComoEntero = Number(
+      numeroNormalizado
+    );
+
+    const capacidad = Number(
+      capacidadMesaNueva.trim()
+    );
+
+    if (
+      !numeroNormalizado ||
+      !Number.isInteger(numeroComoEntero) ||
+      numeroComoEntero < 1
+    ) {
+      Alert.alert(
+        "Número incorrecto",
+        "Ingresa un número de mesa válido mayor a cero."
+      );
+      return;
+    }
+
+    if (
+      !Number.isInteger(capacidad) ||
+      capacidad < 1
+    ) {
+      Alert.alert(
+        "Capacidad incorrecta",
+        "Ingresa una capacidad válida mayor a cero."
+      );
+      return;
+    }
+
+    const mesaActiva = tables.find(
+      (mesa) =>
+        String(getTableNumber(mesa)).trim() ===
+        numeroNormalizado
+    );
+
+    if (mesaActiva) {
+      Alert.alert(
+        "Mesa existente",
+        `La Mesa ${numeroNormalizado} ya está activa.`
+      );
+      return;
+    }
+
+    try {
+      setGuardandoMesa(true);
+
       const headers = await getAuthHeaders();
 
-      const numerosExistentes = tables
-        .map((mesa) => Number(getTableNumber(mesa)))
-        .filter((numero) => !Number.isNaN(numero));
-
-      const siguienteNumero =
-        numerosExistentes.length > 0
-          ? Math.max(...numerosExistentes) + 1
-          : 1;
-
+      /*
+       * Payload idéntico al utilizado por la aplicación web.
+       * El backend recibe number y table_number con el mismo valor.
+       */
       const nuevaMesa = {
-        table_number: String(siguienteNumero),
-        capacity: 4,
+        number: numeroNormalizado,
+        table_number: numeroNormalizado,
+        capacity: capacidad,
         status: "Libre",
-        pos_x: 0,
-        pos_y: 0,
       };
+
+      console.log(
+        "PAYLOAD CREAR MESA:",
+        nuevaMesa
+      );
 
       const response = await fetch(API_URL, {
         method: "POST",
@@ -955,29 +1191,70 @@ await AsyncStorage.multiRemove([
 
       const text = await response.text();
 
-      let data;
+      console.log(
+        "STATUS CREAR MESA:",
+        response.status
+      );
+      console.log(
+        "RESPUESTA CREAR MESA:",
+        text
+      );
 
-      try {
-        data = JSON.parse(text);
-      } catch (error) {
-        throw new Error(
-          `El servidor no devolvió JSON. Estado: ${response.status}. Respuesta: ${text}`
-        );
+      let data = {};
+
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch (error) {
+          if (!response.ok) {
+            throw new Error(
+              `Error ${response.status} al crear la mesa. ` +
+                `Respuesta del servidor: ${text.slice(0, 300)}`
+            );
+          }
+        }
       }
 
       if (!response.ok) {
-        throw new Error(JSON.stringify(data));
+        throw new Error(
+          obtenerMensajeBackend(
+            data,
+            `No se pudo crear la mesa. Estado: ${response.status}`
+          )
+        );
       }
 
+      setModalCrearMesaVisible(false);
+      setNumeroMesaNueva("");
+      setCapacidadMesaNueva("4");
+
       await cargarMesas();
+
+      Alert.alert(
+        response.status === 200
+          ? "Mesa disponible"
+          : "Mesa creada",
+        `La Mesa ${numeroNormalizado} está disponible con capacidad para ${capacidad} personas.`
+      );
     } catch (error) {
-      console.log("Error creando mesa:", error);
-      Alert.alert("Error", "No se pudo crear la mesa.");
+      console.log(
+        "Error creando mesa:",
+        error
+      );
+
+      Alert.alert(
+        "No se pudo crear la mesa",
+        error?.message ||
+          "Ocurrió un error al registrar la mesa."
+      );
+    } finally {
+      setGuardandoMesa(false);
     }
   };
 
   const puedeEliminarMesa = (mesa) => {
-    return mesa.status === "Libre";
+    return String(mesa?.status || "").toLowerCase() ===
+      "libre";
   };
 
   const confirmarEliminarMesa = (mesa) => {
@@ -1002,32 +1279,55 @@ await AsyncStorage.multiRemove([
         {
           text: "Eliminar",
           style: "destructive",
-          onPress: () => eliminarMesa(mesa.id),
+          onPress: () => eliminarMesa(mesa),
         },
       ]
     );
   };
 
-  const eliminarMesa = async (id) => {
+  const eliminarMesa = async (mesa) => {
     try {
       const headers = await getAuthHeaders();
 
-      const response = await fetch(`${API_URL}${id}/`, {
-        method: "DELETE",
-        headers,
-      });
+      const response = await fetch(
+        `${API_URL}${mesa.id}/`,
+        {
+          method: "DELETE",
+          headers,
+        }
+      );
 
       if (!response.ok) {
         const text = await response.text();
-        throw new Error(text || "Error al eliminar mesa");
+
+        throw new Error(
+          text || "Error al eliminar mesa"
+        );
       }
 
       setTables((prevTables) =>
-        prevTables.filter((mesa) => mesa.id !== id)
+        prevTables.filter(
+          (item) => item.id !== mesa.id
+        )
+      );
+
+      Alert.alert(
+        "Mesa eliminada",
+        `La Mesa ${getTableNumber(
+          mesa
+        )} fue eliminada correctamente.`
       );
     } catch (error) {
-      console.log("Error eliminando mesa:", error);
-      Alert.alert("Error", "No se pudo eliminar la mesa.");
+      console.log(
+        "Error eliminando mesa:",
+        error
+      );
+
+      Alert.alert(
+        "No se pudo eliminar",
+        error?.message ||
+          "Ocurrió un error al eliminar la mesa."
+      );
     }
   };
 
@@ -1141,7 +1441,9 @@ await AsyncStorage.multiRemove([
     let metricValue = statusStyle.label;
 
     if (isOccupied) {
-      metricValue = `Bs. ${Number(currentTotal || 0).toFixed(2)}`;
+      metricValue = `Bs. ${Number(
+        currentTotal || 0
+      ).toFixed(2)}`;
     } else if (isReserved) {
       metricValue = activeTime || "Reservada";
     } else if (isFree) {
@@ -1149,19 +1451,13 @@ await AsyncStorage.multiRemove([
     }
 
     return (
-      <TouchableOpacity
-        activeOpacity={0.86}
+      <View
         style={[
           styles.card,
           {
             borderColor: statusStyle.borderColor,
           },
         ]}
-        onPress={() =>
-          navigation.navigate("Pedido", {
-            mesa: item,
-          })
-        }
       >
         <View
           style={[
@@ -1172,91 +1468,351 @@ await AsyncStorage.multiRemove([
           ]}
         />
 
-        <View style={styles.cardHeader}>
-          <View style={styles.iconBox}>
-            <Icon
-              name={statusStyle.icon}
-              size={20}
-              color={statusStyle.color}
-            />
-          </View>
-
-          <View style={styles.cardTitleBox}>
-            <Text
-              numberOfLines={1}
-              style={styles.title}
-            >
-              Mesa {numeroMesa}
-            </Text>
-
-            <View style={styles.capacityRow}>
+        <TouchableOpacity
+          activeOpacity={0.86}
+          style={styles.cardContent}
+          onPress={() =>
+            navigation.navigate("Pedido", {
+              mesa: item,
+            })
+          }
+        >
+          <View style={styles.cardHeader}>
+            <View style={styles.iconBox}>
               <Icon
-                name="users"
-                size={12}
-                color={palette.gray}
+                name={statusStyle.icon}
+                size={20}
+                color={statusStyle.color}
               />
-              <Text style={styles.sub}>
-                {item.capacity || 0} personas
+            </View>
+
+            <View style={styles.cardTitleBox}>
+              <Text
+                numberOfLines={1}
+                style={styles.title}
+              >
+                Mesa {numeroMesa}
               </Text>
+
+              <View style={styles.capacityRow}>
+                <Icon
+                  name="users"
+                  size={12}
+                  color={palette.gray}
+                />
+                <Text style={styles.sub}>
+                  {item.capacity || 0} personas
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        <View style={styles.activityArea}>
-          {customerName ? (
-            <>
-              <Text style={styles.activityLabel}>
-                CLIENTE
+          <View style={styles.activityArea}>
+            {customerName ? (
+              <>
+                <Text style={styles.activityLabel}>
+                  CLIENTE
+                </Text>
+                <Text
+                  numberOfLines={2}
+                  style={styles.client}
+                >
+                  {customerName}
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.empty}>
+                Sin actividad reciente
+              </Text>
+            )}
+          </View>
+
+          <View style={styles.cardFooter}>
+            <View style={styles.metricBox}>
+              <Text style={styles.metricLabel}>
+                {statusStyle.metricLabel}
               </Text>
               <Text
-                numberOfLines={2}
-                style={styles.client}
-              >
-                {customerName}
-              </Text>
-            </>
-          ) : (
-            <Text style={styles.empty}>
-              Sin actividad reciente
-            </Text>
-          )}
-        </View>
-
-        <View style={styles.cardFooter}>
-          <View style={styles.metricBox}>
-            <Text style={styles.metricLabel}>
-              {statusStyle.metricLabel}
-            </Text>
-            <Text
-              numberOfLines={1}
-              style={[
-                styles.metricValue,
-                {
-                  color:
-                    isOccupied
+                numberOfLines={1}
+                style={[
+                  styles.metricValue,
+                  {
+                    color: isOccupied
                       ? palette.primary
                       : statusStyle.color,
-                },
-              ]}
-            >
-              {metricValue}
-            </Text>
-          </View>
+                  },
+                ]}
+              >
+                {metricValue}
+              </Text>
+            </View>
 
-          <View style={styles.cardArrow}>
+            <View style={styles.cardArrow}>
+              <Icon
+                name="chevron-right"
+                size={17}
+                color={palette.primary}
+              />
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={styles.editBtn}
+            onPress={() =>
+              abrirEditarCapacidad(item)
+            }
+          >
             <Icon
-              name="chevron-right"
-              size={17}
+              name="edit-2"
+              size={14}
               color={palette.primary}
             />
-          </View>
+
+            <Text style={styles.editText}>
+              Capacidad
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={[
+              styles.deleteBtn,
+              !isFree &&
+                styles.deleteBtnDisabled,
+            ]}
+            onPress={() =>
+              confirmarEliminarMesa(item)
+            }
+          >
+            <Icon
+              name="trash-2"
+              size={15}
+              color={
+                isFree
+                  ? palette.danger
+                  : palette.placeholder
+              }
+            />
+          </TouchableOpacity>
         </View>
-      </TouchableOpacity>
+      </View>
     );
   };
 
   return (
     <>
+      <Modal
+        visible={modalCrearMesaVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={cerrarModalCrearMesa}
+      >
+        <View style={styles.capacityModalOverlay}>
+          <View style={styles.capacityModalCard}>
+            <View style={styles.createMesaModalIcon}>
+              <Icon
+                name="plus"
+                size={25}
+                color={palette.white}
+              />
+            </View>
+
+            <Text style={styles.capacityModalTitle}>
+              Agregar mesa
+            </Text>
+
+            <Text
+              style={styles.capacityModalDescription}
+            >
+              Ingresa el número y la capacidad de la
+              nueva mesa.
+            </Text>
+
+            <View style={styles.createFormGroup}>
+              <Text style={styles.createFormLabel}>
+                Número de mesa
+              </Text>
+
+              <TextInput
+                style={styles.createFormInput}
+                value={numeroMesaNueva}
+                onChangeText={(texto) =>
+                  setNumeroMesaNueva(
+                    texto.replace(/[^0-9]/g, "")
+                  )
+                }
+                placeholder="Ej.: 8"
+                placeholderTextColor={
+                  palette.placeholder
+                }
+                keyboardType="number-pad"
+                editable={!guardandoMesa}
+                maxLength={4}
+                selectTextOnFocus
+              />
+            </View>
+
+            <View style={styles.createFormGroup}>
+              <Text style={styles.createFormLabel}>
+                Capacidad
+              </Text>
+
+              <TextInput
+                style={styles.createFormInput}
+                value={capacidadMesaNueva}
+                onChangeText={(texto) =>
+                  setCapacidadMesaNueva(
+                    texto.replace(/[^0-9]/g, "")
+                  )
+                }
+                placeholder="Ej.: 4"
+                placeholderTextColor={
+                  palette.placeholder
+                }
+                keyboardType="number-pad"
+                editable={!guardandoMesa}
+                maxLength={3}
+                selectTextOnFocus
+              />
+            </View>
+
+            <View
+              style={styles.capacityModalActions}
+            >
+              <TouchableOpacity
+                style={styles.capacityCancelButton}
+                onPress={cerrarModalCrearMesa}
+                disabled={guardandoMesa}
+              >
+                <Text
+                  style={styles.capacityCancelText}
+                >
+                  Cancelar
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.capacitySaveButton,
+                  guardandoMesa &&
+                    styles.actionButtonDisabled,
+                ]}
+                onPress={crearMesa}
+                disabled={guardandoMesa}
+              >
+                {guardandoMesa ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={palette.white}
+                  />
+                ) : (
+                  <>
+                    <Icon
+                      name="plus-circle"
+                      size={17}
+                      color={palette.white}
+                    />
+                    <Text
+                      style={styles.createMesaSaveText}
+                    >
+                      Crear mesa
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={modalCapacidadVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={cerrarModalCapacidad}
+      >
+        <View style={styles.capacityModalOverlay}>
+          <View style={styles.capacityModalCard}>
+            <View style={styles.capacityModalIcon}>
+              <Icon
+                name="users"
+                size={24}
+                color={palette.primary}
+              />
+            </View>
+
+            <Text style={styles.capacityModalTitle}>
+              Modificar capacidad
+            </Text>
+
+            <Text
+              style={styles.capacityModalDescription}
+            >
+              Mesa{" "}
+              {mesaEditando
+                ? getTableNumber(mesaEditando)
+                : ""}
+            </Text>
+
+            <TextInput
+              style={styles.capacityInput}
+              value={capacidadEditando}
+              onChangeText={setCapacidadEditando}
+              placeholder="Cantidad de personas"
+              placeholderTextColor={
+                palette.placeholder
+              }
+              keyboardType="number-pad"
+              editable={!guardandoCapacidad}
+              maxLength={3}
+              selectTextOnFocus
+            />
+
+            <View
+              style={styles.capacityModalActions}
+            >
+              <TouchableOpacity
+                style={styles.capacityCancelButton}
+                onPress={cerrarModalCapacidad}
+                disabled={guardandoCapacidad}
+              >
+                <Text
+                  style={styles.capacityCancelText}
+                >
+                  Cancelar
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.capacitySaveButton,
+                  guardandoCapacidad &&
+                    styles.actionButtonDisabled,
+                ]}
+                onPress={guardarCapacidad}
+                disabled={guardandoCapacidad}
+              >
+                {guardandoCapacidad ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={palette.white}
+                  />
+                ) : (
+                  <Text
+                    style={styles.capacitySaveText}
+                  >
+                    Guardar
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal
         visible={modalCerrarTurnoVisible}
         transparent
@@ -1276,11 +1832,15 @@ await AsyncStorage.multiRemove([
                 </View>
 
                 <View style={styles.shiftModalTitleBox}>
-                  <Text style={styles.shiftModalTitle}>
+                  <Text
+                    style={styles.shiftModalTitle}
+                  >
                     Cerrar turno
                   </Text>
 
-                  <Text style={styles.shiftModalSubtitle}>
+                  <Text
+                    style={styles.shiftModalSubtitle}
+                  >
                     Finaliza tu jornada como mesero
                   </Text>
                 </View>
@@ -1299,14 +1859,18 @@ await AsyncStorage.multiRemove([
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.shiftObservationLabel}>
+            <Text
+              style={styles.shiftObservationLabel}
+            >
               Observación opcional
             </Text>
 
             <TextInput
               style={styles.shiftObservationInput}
               placeholder="Ej.: Entregué las mesas pendientes al siguiente turno"
-              placeholderTextColor={palette.placeholder}
+              placeholderTextColor={
+                palette.placeholder
+              }
               value={observacionesTurno}
               onChangeText={setObservacionesTurno}
               editable={!procesandoTurno}
@@ -1316,7 +1880,9 @@ await AsyncStorage.multiRemove([
               maxLength={500}
             />
 
-            <Text style={styles.shiftObservationCounter}>
+            <Text
+              style={styles.shiftObservationCounter}
+            >
               {observacionesTurno.length}/500
             </Text>
 
@@ -1346,12 +1912,13 @@ await AsyncStorage.multiRemove([
                     color={palette.white}
                   />
                 ) : (
-                  <>
-
-                    <Text style={styles.shiftEndConfirmText}>
-                      Cerrar turno
-                    </Text>
-                  </>
+                  <Text
+                    style={
+                      styles.shiftEndConfirmText
+                    }
+                  >
+                    Cerrar turno
+                  </Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -1363,7 +1930,9 @@ await AsyncStorage.multiRemove([
         visible={menuVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setMenuVisible(false)}
+        onRequestClose={() =>
+          setMenuVisible(false)
+        }
       >
         <View style={styles.modalBackground}>
           <TouchableOpacity
@@ -1376,30 +1945,50 @@ await AsyncStorage.multiRemove([
             <View style={styles.drawerHeader}>
               <TouchableOpacity
                 style={styles.closeBtn}
-                onPress={() => setMenuVisible(false)}
+                onPress={() =>
+                  setMenuVisible(false)
+                }
               >
-                <Icon name="x" size={24} color={palette.white} />
+                <Icon
+                  name="x"
+                  size={24}
+                  color={palette.white}
+                />
               </TouchableOpacity>
 
               <View style={styles.drawerBrandRow}>
                 <View style={styles.brandLogo}>
-                  <Text style={styles.brandLogoText}>N</Text>
+                  <Text
+                    style={styles.brandLogoText}
+                  >
+                    N
+                  </Text>
                 </View>
 
                 <View style={styles.brandTextBox}>
-                  <Text style={styles.brandName}>NextOrder</Text>
-                  <Text style={styles.brandRole}>MESERO</Text>
+                  <Text style={styles.brandName}>
+                    NextOrder
+                  </Text>
+                  <Text style={styles.brandRole}>
+                    MESERO
+                  </Text>
                 </View>
               </View>
 
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
-                  {userName ? userName.charAt(0).toUpperCase() : "U"}
+                  {userName
+                    ? userName.charAt(0).toUpperCase()
+                    : "U"}
                 </Text>
               </View>
 
-              <Text style={styles.drawerName}>{userName}</Text>
-              <Text style={styles.drawerEmail}>{userEmail}</Text>
+              <Text style={styles.drawerName}>
+                {userName}
+              </Text>
+              <Text style={styles.drawerEmail}>
+                {userEmail}
+              </Text>
 
               <View
                 style={[
@@ -1418,7 +2007,9 @@ await AsyncStorage.multiRemove([
                   ]}
                 />
 
-                <Text style={styles.drawerShiftText}>
+                <Text
+                  style={styles.drawerShiftText}
+                >
                   {turnoActivo
                     ? "Turno activo"
                     : "Sin turno activo"}
@@ -1428,11 +2019,24 @@ await AsyncStorage.multiRemove([
 
             <View style={styles.drawerMenu}>
               <TouchableOpacity
-                style={[styles.drawerItem, styles.drawerItemActive]}
-                onPress={() => setMenuVisible(false)}
+                style={[
+                  styles.drawerItem,
+                  styles.drawerItemActive,
+                ]}
+                onPress={() =>
+                  setMenuVisible(false)
+                }
               >
-                <Icon name="grid" size={21} color={palette.white} />
-                <Text style={styles.drawerItemText}>Mapa de mesas</Text>
+                <Icon
+                  name="grid"
+                  size={21}
+                  color={palette.white}
+                />
+                <Text
+                  style={styles.drawerItemText}
+                >
+                  Mapa de mesas
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1444,7 +2048,9 @@ await AsyncStorage.multiRemove([
                   size={21}
                   color={palette.light}
                 />
-                <Text style={styles.drawerItemText}>
+                <Text
+                  style={styles.drawerItemText}
+                >
                   Pedidos pendientes
                 </Text>
               </TouchableOpacity>
@@ -1458,7 +2064,9 @@ await AsyncStorage.multiRemove([
                   size={21}
                   color={palette.light}
                 />
-                <Text style={styles.drawerItemText}>
+                <Text
+                  style={styles.drawerItemText}
+                >
                   Historial de ventas
                 </Text>
               </TouchableOpacity>
@@ -1469,8 +2077,14 @@ await AsyncStorage.multiRemove([
                 style={styles.logoutBtn}
                 onPress={cerrarSesion}
               >
-                <Icon name="log-out" size={20} color="#FFB4B8" />
-                <Text style={styles.logoutText}>Cerrar sesión</Text>
+                <Icon
+                  name="log-out"
+                  size={20}
+                  color="#FFB4B8"
+                />
+                <Text style={styles.logoutText}>
+                  Cerrar sesión
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1481,13 +2095,21 @@ await AsyncStorage.multiRemove([
         <View style={styles.topBar}>
           <TouchableOpacity
             style={styles.menuBtn}
-            onPress={() => setMenuVisible(true)}
+            onPress={() =>
+              setMenuVisible(true)
+            }
           >
-            <Icon name="menu" size={23} color={palette.white} />
+            <Icon
+              name="menu"
+              size={23}
+              color={palette.white}
+            />
           </TouchableOpacity>
 
           <View style={styles.headerTextBox}>
-            <Text style={styles.pageTitle}>Mapa de Mesas</Text>
+            <Text style={styles.pageTitle}>
+              Mapa de Mesas
+            </Text>
             <Text style={styles.pageSubtitle}>
               Estado del restaurante en tiempo real
             </Text>
@@ -1496,12 +2118,21 @@ await AsyncStorage.multiRemove([
           <TouchableOpacity
             style={styles.refreshBtn}
             onPress={refrescarPantalla}
-            disabled={loading || procesandoTurno}
+            disabled={
+              loading || procesandoTurno
+            }
           >
             {loading ? (
-              <ActivityIndicator size="small" color={palette.primary} />
+              <ActivityIndicator
+                size="small"
+                color={palette.primary}
+              />
             ) : (
-              <Icon name="refresh-cw" size={18} color={palette.primary} />
+              <Icon
+                name="refresh-cw"
+                size={18}
+                color={palette.primary}
+              />
             )}
           </TouchableOpacity>
         </View>
@@ -1524,7 +2155,9 @@ await AsyncStorage.multiRemove([
               ]}
             >
               <Icon
-                name={turnoActivo ? "clock" : "coffee"}
+                name={
+                  turnoActivo ? "clock" : "coffee"
+                }
                 size={23}
                 color={
                   turnoActivo
@@ -1566,20 +2199,27 @@ await AsyncStorage.multiRemove([
               </View>
 
               {cargandoTurno ? (
-                <Text style={styles.shiftDescription}>
+                <Text
+                  style={styles.shiftDescription}
+                >
                   Verificando estado del turno...
                 </Text>
               ) : turnoActivo ? (
-                <Text style={styles.shiftDescription}>
+                <Text
+                  style={styles.shiftDescription}
+                >
                   Inicio:{" "}
                   {formatearFechaHora(
                     turnoActual?.start_time
                   )}
                 </Text>
               ) : (
-                <Text style={styles.shiftDescription}>
-                  Puedes revisar la app. Inicia el turno
-                  cuando estés listo para atender mesas.
+                <Text
+                  style={styles.shiftDescription}
+                >
+                  Puedes revisar la app. Inicia el
+                  turno cuando estés listo para
+                  atender mesas.
                 </Text>
               )}
             </View>
@@ -1591,7 +2231,8 @@ await AsyncStorage.multiRemove([
               turnoActivo
                 ? styles.shiftEndButton
                 : styles.shiftStartButton,
-              (cargandoTurno || procesandoTurno) &&
+              (cargandoTurno ||
+                procesandoTurno) &&
                 styles.shiftButtonDisabled,
             ]}
             onPress={
@@ -1609,72 +2250,123 @@ await AsyncStorage.multiRemove([
                 color={palette.white}
               />
             ) : (
-              <>
-
-
-                <Text style={styles.shiftActionText}>
-                  {turnoActivo
-                    ? "Cerrar turno"
-                    : "Iniciar turno"}
-                </Text>
-              </>
+              <Text
+                style={styles.shiftActionText}
+              >
+                {turnoActivo
+                  ? "Cerrar turno"
+                  : "Iniciar turno"}
+              </Text>
             )}
           </TouchableOpacity>
         </View>
 
         <View style={styles.filterPanel}>
-          <View style={styles.filterHeadingRow}>
-            <View style={styles.filterHeadingIcon}>
-              <Icon name="filter" size={17} color={palette.primary} />
+          <View
+            style={styles.filterHeadingRow}
+          >
+            <View
+              style={styles.filterHeadingIcon}
+            >
+              <Icon
+                name="filter"
+                size={17}
+                color={palette.primary}
+              />
             </View>
 
-            <Text style={styles.filterHeading}>Filtrar mesas</Text>
+            <Text
+              style={styles.filterHeading}
+            >
+              Filtrar mesas
+            </Text>
           </View>
 
           <View style={styles.filters}>
-            {["Todas", "Libre", "Ocupada", "Reservada"].map(
-              (item) => (
-                <TouchableOpacity
-                  key={item}
-                  onPress={() => setFilter(item)}
+            {[
+              "Todas",
+              "Libre",
+              "Ocupada",
+              "Reservada",
+            ].map((item) => (
+              <TouchableOpacity
+                key={item}
+                onPress={() => setFilter(item)}
+                style={[
+                  styles.filter,
+                  filter === item &&
+                    styles.activeFilter,
+                ]}
+              >
+                <Text
+                  numberOfLines={1}
                   style={[
-                    styles.filter,
-                    filter === item && styles.activeFilter,
+                    styles.filterText,
+                    filter === item &&
+                      styles.activeFilterText,
                   ]}
                 >
-                  <Text
-                    numberOfLines={1}
-                    style={[
-                      styles.filterText,
-                      filter === item &&
-                        styles.activeFilterText,
-                    ]}
-                  >
-                    {item} ({filterCounts[item] || 0})
-                  </Text>
-                </TouchableOpacity>
-              )
-            )}
+                  {item} (
+                  {filterCounts[item] || 0})
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
+        </View>
+
+        <View style={styles.managementRow}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={[
+              styles.addMesaBtn,
+              loading &&
+                styles.actionButtonDisabled,
+            ]}
+            onPress={abrirModalCrearMesa}
+            disabled={loading || guardandoMesa}
+          >
+            <Icon
+              name="plus-circle"
+              size={19}
+              color={palette.white}
+            />
+
+            <Text style={styles.addMesaText}>
+              Agregar mesa
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {loading ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color={palette.primary} />
-            <Text style={styles.loadingText}>Cargando mesas...</Text>
+            <ActivityIndicator
+              size="large"
+              color={palette.primary}
+            />
+            <Text style={styles.loadingText}>
+              Cargando mesas...
+            </Text>
           </View>
         ) : (
           <FlatList
             data={filtered}
             renderItem={renderItem}
-            keyExtractor={(item) => String(item.id)}
+            keyExtractor={(item) =>
+              String(item.id)
+            }
             numColumns={2}
             showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContent}
-            columnWrapperStyle={styles.columnWrapper}
+            contentContainerStyle={
+              styles.listContent
+            }
+            columnWrapperStyle={
+              styles.columnWrapper
+            }
             ListEmptyComponent={
               <View style={styles.emptyListBox}>
-                <Text style={styles.emptyListText}>
+                <Text
+                  style={styles.emptyListText}
+                >
                   No hay mesas para mostrar.
                 </Text>
               </View>
@@ -1750,13 +2442,32 @@ const styles = StyleSheet.create({
     borderColor: "#D2E4EA",
   },
 
+  managementRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginBottom: 12,
+  },
+
   addMesaBtn: {
-    display: "none",
+    minHeight: 45,
+    paddingHorizontal: 18,
+    borderRadius: 14,
+    backgroundColor: palette.primary,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 2,
   },
 
   addMesaText: {
     color: palette.white,
-    fontWeight: "800",
+    fontWeight: "900",
+    fontSize: 13,
+    marginLeft: 8,
+  },
+
+  actionButtonDisabled: {
+    opacity: 0.55,
   },
 
   shiftCard: {
@@ -1887,7 +2598,6 @@ const styles = StyleSheet.create({
     color: palette.white,
     fontSize: 12.5,
     fontWeight: "900",
-    marginLeft: 7,
   },
 
   filterPanel: {
@@ -1990,7 +2700,7 @@ const styles = StyleSheet.create({
 
   card: {
     width: "48.5%",
-    minHeight: 205,
+    minHeight: 245,
     padding: 14,
     borderRadius: 24,
     backgroundColor: palette.card,
@@ -2001,6 +2711,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.07,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
+  },
+
+  cardContent: {
+    flex: 1,
   },
 
   dot: {
@@ -2112,74 +2826,50 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  row: {
+  cardActions: {
     flexDirection: "row",
     alignItems: "center",
-  },
-
-  clientBox: {
-    backgroundColor: palette.muted,
-    padding: 10,
-    borderRadius: 15,
     marginTop: 10,
-  },
-
-  clientLabel: {
-    fontSize: 10,
-    color: palette.gray,
-  },
-
-  footer: {
-    marginTop: 10,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  total: {
-    fontWeight: "900",
-    color: palette.primary,
-  },
-
-  time: {
-    color: palette.warning,
-    fontWeight: "700",
-  },
-
-  available: {
-    color: palette.success,
-    fontWeight: "800",
-  },
-
-  orderText: {
-    color: palette.accent,
-    fontWeight: "800",
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(6,80,132,0.12)",
   },
 
   editBtn: {
-    display: "none",
+    flex: 1,
+    minHeight: 34,
+    borderRadius: 10,
+    backgroundColor: palette.infoBackground,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#C7DDE7",
+    marginRight: 6,
   },
 
   editText: {
     color: palette.primary,
-    fontWeight: "800",
+    fontWeight: "900",
+    fontSize: 10.5,
+    marginLeft: 5,
   },
 
   deleteBtn: {
-    display: "none",
+    width: 36,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: palette.dangerBackground,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#FFD0D2",
   },
 
   deleteBtnDisabled: {
-    display: "none",
-  },
-
-  deleteText: {
-    color: palette.danger,
-    fontWeight: "800",
-  },
-
-  deleteTextDisabled: {
-    color: palette.placeholder,
+    backgroundColor: palette.muted,
+    borderColor: palette.border,
+    opacity: 0.65,
   },
 
   modalBackground: {
@@ -2383,6 +3073,138 @@ const styles = StyleSheet.create({
     marginLeft: 11,
   },
 
+  createMesaModalIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: palette.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 13,
+  },
+
+  createFormGroup: {
+    width: "100%",
+    marginBottom: 14,
+  },
+
+  createFormLabel: {
+    color: palette.dark,
+    fontSize: 12.5,
+    fontWeight: "900",
+    marginBottom: 7,
+  },
+
+  createFormInput: {
+    width: "100%",
+    minHeight: 50,
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 14,
+    backgroundColor: palette.background,
+    color: palette.text,
+    fontSize: 16,
+    fontWeight: "800",
+    paddingHorizontal: 14,
+  },
+
+  createMesaSaveText: {
+    color: palette.white,
+    fontWeight: "900",
+    marginLeft: 7,
+  },
+
+  capacityModalOverlay: {
+    flex: 1,
+    backgroundColor: palette.overlay,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+
+  capacityModalCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 24,
+    backgroundColor: palette.surface,
+    padding: 22,
+    alignItems: "center",
+    elevation: 12,
+  },
+
+  capacityModalIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: palette.infoBackground,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 13,
+  },
+
+  capacityModalTitle: {
+    color: palette.dark,
+    fontSize: 19,
+    fontWeight: "900",
+  },
+
+  capacityModalDescription: {
+    color: palette.textSecondary,
+    fontSize: 13,
+    marginTop: 4,
+    marginBottom: 18,
+  },
+
+  capacityInput: {
+    width: "100%",
+    minHeight: 50,
+    borderWidth: 1,
+    borderColor: palette.border,
+    borderRadius: 14,
+    backgroundColor: palette.background,
+    color: palette.text,
+    fontSize: 17,
+    fontWeight: "800",
+    textAlign: "center",
+    paddingHorizontal: 14,
+  },
+
+  capacityModalActions: {
+    width: "100%",
+    flexDirection: "row",
+    marginTop: 20,
+  },
+
+  capacityCancelButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 13,
+    backgroundColor: palette.muted,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 5,
+  },
+
+  capacityCancelText: {
+    color: palette.textSecondary,
+    fontWeight: "900",
+  },
+
+  capacitySaveButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 13,
+    backgroundColor: palette.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 5,
+  },
+
+  capacitySaveText: {
+    color: palette.white,
+    fontWeight: "900",
+  },
+
   shiftModalOverlay: {
     flex: 1,
     justifyContent: "flex-end",
@@ -2509,6 +3331,5 @@ const styles = StyleSheet.create({
   shiftEndConfirmText: {
     color: palette.white,
     fontWeight: "900",
-    marginLeft: 7,
   },
 });
