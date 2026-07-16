@@ -70,6 +70,9 @@ export default function PedidoScreen({ route, navigation }) {
   const [carrito, setCarrito] = useState([]);
   const [pedidoActual, setPedidoActual] = useState([]);
   const [ordenPendiente, setOrdenPendiente] = useState(null);
+  const [pedidoBloqueado, setPedidoBloqueado] = useState(false);
+  const [mensajeBloqueo, setMensajeBloqueo] = useState("");
+  const [propietarioPedido, setPropietarioPedido] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [cargandoPedidoActual, setCargandoPedidoActual] = useState(false);
@@ -243,7 +246,13 @@ export default function PedidoScreen({ route, navigation }) {
       order?.cashier ??
       order?.cashier_id ??
       order?.employee ??
-      order?.employee_id;
+      order?.employee_id ??
+      order?.owner ??
+      order?.owner_id ??
+      order?.staff ??
+      order?.staff_id ??
+      order?.assigned_to ??
+      order?.assigned_to_id;
 
     if (
       typeof usuarioOrden === "object" &&
@@ -253,11 +262,176 @@ export default function PedidoScreen({ route, navigation }) {
         usuarioOrden.id ??
         usuarioOrden.user_id ??
         usuarioOrden.pk ??
+        usuarioOrden.username ??
+        usuarioOrden.email ??
         null
       );
     }
 
     return usuarioOrden ?? null;
+  };
+
+  const obtenerNombreUsuarioOrden = (order) => {
+    const usuarioOrden =
+      order?.created_by ??
+      order?.user ??
+      order?.waiter ??
+      order?.cashier ??
+      order?.employee;
+
+    if (
+      typeof usuarioOrden === "object" &&
+      usuarioOrden !== null
+    ) {
+      const nombreCompleto =
+        `${usuarioOrden.first_name || ""} ${
+          usuarioOrden.last_name || ""
+        }`.trim();
+
+      return (
+        nombreCompleto ||
+        usuarioOrden.username ||
+        usuarioOrden.email ||
+        usuarioOrden.name ||
+        "otro usuario"
+      );
+    }
+
+    return (
+      order?.created_by_name ??
+      order?.user_name ??
+      order?.username ??
+      order?.waiter_name ??
+      order?.cashier_name ??
+      order?.employee_name ??
+      "otro usuario"
+    );
+  };
+
+  const esOrdenPendiente = (order) => {
+    const estado = String(
+      order?.status || ""
+    ).toLowerCase();
+
+    return (
+      estado === "pendiente" ||
+      estado === "pending"
+    );
+  };
+
+  const obtenerMesaIdOrden = (order) => {
+    return (
+      order?.table?.id ??
+      order?.table ??
+      order?.mesa?.id ??
+      order?.mesa ??
+      order?.table_id ??
+      null
+    );
+  };
+
+  const evaluarAccesoOrden = (
+    order,
+    sesion,
+    propietariosLocales
+  ) => {
+    if (!order) {
+      return {
+        puedeEditar: true,
+        propietarioId: null,
+        propietarioNombre: "",
+        mensaje: "",
+      };
+    }
+
+    const propietarioBackend =
+      obtenerIdUsuarioOrden(order);
+
+    const propietarioLocal =
+      propietariosLocales[String(order.id)] ??
+      null;
+
+    const propietarioId =
+      propietarioBackend ?? propietarioLocal;
+
+    const propietarioNombre =
+      propietarioBackend !== null &&
+      propietarioBackend !== undefined
+        ? obtenerNombreUsuarioOrden(order)
+        : propietarioLocal
+        ? "otro usuario de la aplicación"
+        : "caja u otro usuario";
+
+    /*
+     * Si el backend no informa quién creó la orden y tampoco
+     * existe un propietario local, se bloquea por seguridad.
+     * Esto evita que un mesero se apropie de un pedido creado
+     * previamente desde la caja web.
+     */
+    if (
+      propietarioId === null ||
+      propietarioId === undefined ||
+      String(propietarioId).trim() === ""
+    ) {
+      return {
+        puedeEditar: false,
+        propietarioId: null,
+        propietarioNombre,
+        mensaje:
+          "Esta mesa ya tiene un pedido pendiente creado desde caja o por otro usuario. Solo el responsable original puede modificarlo.",
+      };
+    }
+
+    const propietarioNormalizado =
+      String(propietarioId).toLowerCase();
+
+    const puedeEditar =
+      propietarioNormalizado ===
+        String(sesion.userId).toLowerCase() ||
+      Boolean(
+        sesion.loginUsername &&
+          propietarioNormalizado ===
+            String(
+              sesion.loginUsername
+            ).toLowerCase()
+      );
+
+    return {
+      puedeEditar,
+      propietarioId: String(propietarioId),
+      propietarioNombre,
+      mensaje: puedeEditar
+        ? ""
+        : `Esta mesa ya tiene un pedido pendiente registrado por ${propietarioNombre}. No puedes agregar ni modificar productos.`,
+    };
+  };
+
+  const aplicarBloqueoPedido = (evaluacion) => {
+    const bloqueado = !evaluacion.puedeEditar;
+
+    setPedidoBloqueado(bloqueado);
+    setMensajeBloqueo(
+      bloqueado ? evaluacion.mensaje : ""
+    );
+    setPropietarioPedido(
+      bloqueado
+        ? evaluacion.propietarioNombre
+        : ""
+    );
+
+    if (bloqueado) {
+      setCarrito([]);
+    }
+
+    return bloqueado;
+  };
+
+  const mostrarPedidoBloqueado = () => {
+    Alert.alert(
+      "Pedido bloqueado",
+      mensajeBloqueo ||
+        "Esta mesa tiene un pedido pendiente registrado por otro usuario."
+    );
   };
 
   const obtenerPropietarioTurno = (turno) => {
@@ -480,9 +654,12 @@ export default function PedidoScreen({ route, navigation }) {
   const buscarOrdenPendienteDeMesa = async () => {
     const headers = await getAuthHeaders();
     const sesion = await obtenerSesionActual();
-    const propietariosLocales = await leerPropietariosLocales();
+    const propietariosLocales =
+      await leerPropietariosLocales();
 
-    console.log("========== BUSCAR ORDEN PENDIENTE ==========");
+    console.log(
+      "========== BUSCAR ORDEN PENDIENTE =========="
+    );
     console.log("ORDERS_URL:", ORDERS_URL);
     console.log("MESA ACTUAL:", mesa);
     console.log("USUARIO ACTUAL:", sesion.userId);
@@ -507,67 +684,115 @@ export default function PedidoScreen({ route, navigation }) {
 
     const ordenes = normalizarLista(data);
 
-    console.log("ORDENES NORMALIZADAS:", ordenes);
+    console.log(
+      "ORDENES NORMALIZADAS:",
+      ordenes
+    );
 
-    const ordenPendienteEncontrada = ordenes.find((order) => {
-      const mesaOrden =
-        order.table?.id ??
-        order.table ??
-        order.mesa?.id ??
-        order.mesa ??
-        order.table_id;
+    const ordenesPendientesMesa =
+      ordenes.filter((order) => {
+        const mesaOrden =
+          obtenerMesaIdOrden(order);
 
-      const usuarioBackend = obtenerIdUsuarioOrden(order);
-      const usuarioLocal =
-        propietariosLocales[String(order.id)] ?? null;
+        return (
+          Number(mesaOrden) ===
+            Number(mesa.id) &&
+          esOrdenPendiente(order)
+        );
+      });
 
-      const usuarioOrden =
-        usuarioBackend ?? usuarioLocal;
+    const activeOrderId =
+      mesa?.activeOrderId ??
+      mesa?.active_order_id ??
+      null;
 
-      const coincideMesa =
-        Number(mesaOrden) === Number(mesa.id);
+    let ordenPendienteEncontrada =
+      activeOrderId
+        ? ordenesPendientesMesa.find(
+            (order) =>
+              Number(order.id) ===
+              Number(activeOrderId)
+          )
+        : null;
 
-      const estaPendiente =
-        String(order.status || "").toLowerCase() ===
-        "pendiente";
+    if (!ordenPendienteEncontrada) {
+      ordenPendienteEncontrada =
+        ordenesPendientesMesa[0] || null;
+    }
 
-      const perteneceAlUsuario =
-        usuarioOrden !== null &&
-        usuarioOrden !== undefined &&
-        String(usuarioOrden) === String(sesion.userId);
+    if (!ordenPendienteEncontrada) {
+      aplicarBloqueoPedido({
+        puedeEditar: true,
+        propietarioId: null,
+        propietarioNombre: "",
+        mensaje: "",
+      });
 
-      const esOrdenActivaSinPropietario =
-        !usuarioOrden &&
-        mesa?.activeOrderId &&
-        Number(order.id) === Number(mesa.activeOrderId);
-
-      return (
-        coincideMesa &&
-        estaPendiente &&
-        (perteneceAlUsuario || esOrdenActivaSinPropietario)
+      console.log(
+        "NO EXISTE ORDEN PENDIENTE EN LA MESA"
       );
-    });
+      console.log(
+        "==========================================="
+      );
 
-    if (
-      ordenPendienteEncontrada &&
-      !obtenerIdUsuarioOrden(ordenPendienteEncontrada) &&
-      !propietariosLocales[
-        String(ordenPendienteEncontrada.id)
-      ]
-    ) {
-      await guardarPropietarioLocal(
-        ordenPendienteEncontrada.id,
-        sesion.userId
+      return null;
+    }
+
+    /*
+     * El listado puede no incluir created_by/user/waiter.
+     * Se consulta el detalle antes de decidir el bloqueo.
+     */
+    let ordenEvaluada =
+      ordenPendienteEncontrada;
+
+    try {
+      ordenEvaluada = await obtenerDetalleOrden(
+        ordenPendienteEncontrada.id
+      );
+    } catch (error) {
+      console.log(
+        "No se pudo cargar el detalle para verificar propietario:",
+        error
       );
     }
 
-    console.log(
-      "ORDEN PENDIENTE DEL USUARIO:",
-      ordenPendienteEncontrada
-    );
-    console.log("===========================================");
+    const ordenCompleta = {
+      ...ordenPendienteEncontrada,
+      ...ordenEvaluada,
+    };
 
-    return ordenPendienteEncontrada || null;
+    const evaluacion = evaluarAccesoOrden(
+      ordenCompleta,
+      sesion,
+      propietariosLocales
+    );
+
+    aplicarBloqueoPedido(evaluacion);
+
+    const ordenConPermiso = {
+      ...ordenCompleta,
+      __puedeEditar: evaluacion.puedeEditar,
+      __propietarioId:
+        evaluacion.propietarioId,
+      __propietarioNombre:
+        evaluacion.propietarioNombre,
+      __mensajeBloqueo:
+        evaluacion.mensaje,
+    };
+
+    console.log(
+      "ORDEN PENDIENTE ENCONTRADA:",
+      ordenConPermiso
+    );
+    console.log(
+      "ACCESO A LA ORDEN:",
+      evaluacion
+    );
+    console.log(
+      "==========================================="
+    );
+
+    return ordenConPermiso;
   };
 
   const cargarPedidoPendiente = async (productosDisponibles) => {
@@ -579,6 +804,9 @@ export default function PedidoScreen({ route, navigation }) {
       if (!orden) {
         setOrdenPendiente(null);
         setPedidoActual([]);
+        setPedidoBloqueado(false);
+        setMensajeBloqueo("");
+        setPropietarioPedido("");
         return;
       }
 
@@ -586,7 +814,21 @@ export default function PedidoScreen({ route, navigation }) {
 
       if (!Array.isArray(orden.items)) {
         try {
-          ordenConDetalle = await obtenerDetalleOrden(orden.id);
+          const detalle = await obtenerDetalleOrden(
+            orden.id
+          );
+
+          ordenConDetalle = {
+            ...orden,
+            ...detalle,
+            __puedeEditar: orden.__puedeEditar,
+            __propietarioId:
+              orden.__propietarioId,
+            __propietarioNombre:
+              orden.__propietarioNombre,
+            __mensajeBloqueo:
+              orden.__mensajeBloqueo,
+          };
         } catch (error) {
           console.log("No se pudo obtener detalle de orden:", error);
           ordenConDetalle = orden;
@@ -631,9 +873,18 @@ export default function PedidoScreen({ route, navigation }) {
 
       setPedidoActual(itemsAdaptados);
     } catch (error) {
-      console.log("Error cargando pedido pendiente:", error);
+      console.log(
+        "Error cargando pedido pendiente:",
+        error
+      );
       setOrdenPendiente(null);
       setPedidoActual([]);
+      setPedidoBloqueado(true);
+      setMensajeBloqueo(
+        "No se pudo verificar quién administra el pedido pendiente. Por seguridad, la edición está bloqueada."
+      );
+      setPropietarioPedido("");
+      setCarrito([]);
     } finally {
       setCargandoPedidoActual(false);
     }
@@ -724,36 +975,74 @@ useFocusEffect(
 );
 
   const agregarAlCarrito = (producto) => {
+    if (pedidoBloqueado) {
+      mostrarPedidoBloqueado();
+      return;
+    }
+
     setCarrito((prev) => {
       const existe = prev.find(
-        (item) => item.producto.id === producto.id
+        (item) =>
+          item.producto.id === producto.id
       );
 
       if (existe) {
         return prev.map((item) =>
           item.producto.id === producto.id
-            ? { ...item, cantidad: item.cantidad + 1 }
+            ? {
+                ...item,
+                cantidad: item.cantidad + 1,
+              }
             : item
         );
       }
 
-      return [...prev, { producto, cantidad: 1, notas: "" }];
+      return [
+        ...prev,
+        {
+          producto,
+          cantidad: 1,
+          notas: "",
+        },
+      ];
     });
   };
 
-  const cambiarCantidad = (productoId, delta) => {
+  const cambiarCantidad = (
+    productoId,
+    delta
+  ) => {
+    if (pedidoBloqueado) {
+      mostrarPedidoBloqueado();
+      return;
+    }
+
     setCarrito((prev) =>
       prev
         .map((item) =>
           item.producto.id === productoId
-            ? { ...item, cantidad: item.cantidad + delta }
+            ? {
+                ...item,
+                cantidad:
+                  item.cantidad + delta,
+              }
             : item
         )
-        .filter((item) => item.cantidad > 0)
+        .filter(
+          (item) => item.cantidad > 0
+        )
     );
   };
 
-  const actualizarNota = (productoId, nota) => {
+  const actualizarNota = (
+    productoId,
+    nota
+  ) => {
+    if (pedidoBloqueado) {
+      mostrarPedidoBloqueado();
+      return;
+    }
+
     setCarrito((prev) =>
       prev.map((item) =>
         item.producto.id === productoId
@@ -809,6 +1098,11 @@ useFocusEffect(
   const cantidadTotal = cantidadPedidoActual + cantidadCarrito;
 
   const enviarPedido = async () => {
+    if (pedidoBloqueado) {
+      mostrarPedidoBloqueado();
+      return;
+    }
+
     if (carrito.length === 0) {
       Alert.alert(
         "Sin productos nuevos",
@@ -858,7 +1152,17 @@ useFocusEffect(
               const headers = await getAuthHeaders();
               const updateUrl = `${TABLES_URL}${mesa.id}/update_status/`;
 
-              let orden = await buscarOrdenPendienteDeMesa();
+              let orden =
+                await buscarOrdenPendienteDeMesa();
+
+              if (
+                orden &&
+                orden.__puedeEditar === false
+              ) {
+                throw new Error(
+                  "PEDIDO_BLOQUEADO"
+                );
+              }
 
               // Construir el array de orders expandiendo cantidades
               const payloadOrders = [];
@@ -914,9 +1218,27 @@ useFocusEffect(
                 throw new Error(JSON.stringify(responseData));
               }
 
-              if (!orden && responseData?.table?.activeOrderId) {
-                const sesion = await obtenerSesionActual();
-                await guardarPropietarioLocal(responseData.table.activeOrderId, sesion.userId);
+              if (!orden) {
+                const nuevaOrdenId =
+                  responseData?.table
+                    ?.activeOrderId ??
+                  responseData?.table
+                    ?.active_order_id ??
+                  responseData?.activeOrderId ??
+                  responseData?.active_order_id ??
+                  responseData?.order_id ??
+                  responseData?.order?.id ??
+                  null;
+
+                if (nuevaOrdenId) {
+                  const sesion =
+                    await obtenerSesionActual();
+
+                  await guardarPropietarioLocal(
+                    nuevaOrdenId,
+                    sesion.userId
+                  );
+                }
               }
 
               setCarrito([]);
@@ -932,8 +1254,16 @@ useFocusEffect(
             } catch (error) {
               console.log("Error enviando pedido:", error);
 
-              if (error?.message === "TURNO_CERRADO") {
+              if (
+                error?.message ===
+                "TURNO_CERRADO"
+              ) {
                 mostrarTurnoCerrado();
+              } else if (
+                error?.message ===
+                "PEDIDO_BLOQUEADO"
+              ) {
+                mostrarPedidoBloqueado();
               } else {
                 Alert.alert(
                   "Error",
@@ -1132,7 +1462,12 @@ useFocusEffect(
               onPress={() =>
                 cambiarCantidad(item.id, -1)
               }
-              style={styles.ctrlBtn}
+              style={[
+                styles.ctrlBtn,
+                pedidoBloqueado &&
+                  styles.controlDisabled,
+              ]}
+              disabled={pedidoBloqueado}
             >
               <Icon
                 name="minus"
@@ -1152,7 +1487,10 @@ useFocusEffect(
               style={[
                 styles.ctrlBtn,
                 styles.ctrlBtnAdd,
+                pedidoBloqueado &&
+                  styles.controlDisabled,
               ]}
+              disabled={pedidoBloqueado}
             >
               <Icon
                 name="plus"
@@ -1163,8 +1501,15 @@ useFocusEffect(
           </View>
         ) : (
           <TouchableOpacity
-            style={styles.addBtn}
-            onPress={() => agregarAlCarrito(item)}
+            style={[
+              styles.addBtn,
+              pedidoBloqueado &&
+                styles.addBtnDisabled,
+            ]}
+            onPress={() =>
+              agregarAlCarrito(item)
+            }
+            disabled={pedidoBloqueado}
           >
             <Icon
               name="plus"
@@ -1172,7 +1517,9 @@ useFocusEffect(
               color={palette.white}
             />
             <Text style={styles.addBtnText}>
-              Agregar
+              {pedidoBloqueado
+                ? "Bloqueado"
+                : "Agregar"}
             </Text>
           </TouchableOpacity>
         )}
@@ -1232,6 +1579,36 @@ useFocusEffect(
         </TouchableOpacity>
       </View>
 
+
+      {pedidoBloqueado && (
+        <View style={styles.orderLockBanner}>
+          <View style={styles.orderLockIcon}>
+            <Icon
+              name="lock"
+              size={21}
+              color={palette.danger}
+            />
+          </View>
+
+          <View style={styles.orderLockTextBox}>
+            <Text style={styles.orderLockTitle}>
+              Pedido administrado por otro usuario
+            </Text>
+
+            <Text style={styles.orderLockMessage}>
+              {mensajeBloqueo}
+            </Text>
+
+            {propietarioPedido ? (
+              <Text
+                style={styles.orderLockOwner}
+              >
+                Responsable: {propietarioPedido}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      )}
 
       <View style={styles.tabs}>
         <TouchableOpacity
@@ -1631,7 +2008,12 @@ useFocusEffect(
                             -1
                           )
                         }
-                        style={styles.ctrlBtn}
+                        style={[
+                          styles.ctrlBtn,
+                          pedidoBloqueado &&
+                            styles.controlDisabled,
+                        ]}
+                        disabled={pedidoBloqueado}
                       >
                         <Icon
                           name="minus"
@@ -1654,7 +2036,10 @@ useFocusEffect(
                         style={[
                           styles.ctrlBtn,
                           styles.ctrlBtnAdd,
+                          pedidoBloqueado &&
+                            styles.controlDisabled,
                         ]}
+                        disabled={pedidoBloqueado}
                       >
                         <Icon
                           name="plus"
@@ -1672,7 +2057,11 @@ useFocusEffect(
                       color={palette.accent}
                     />
                     <TextInput
-                      style={styles.notaInput}
+                      style={[
+                        styles.notaInput,
+                        pedidoBloqueado &&
+                          styles.inputDisabled,
+                      ]}
                       placeholder="Observación: sin cebolla, sin picante..."
                       placeholderTextColor={
                         palette.placeholder
@@ -1684,6 +2073,7 @@ useFocusEffect(
                           texto
                         )
                       }
+                      editable={!pedidoBloqueado}
                     />
                   </View>
                 </View>
@@ -1691,8 +2081,16 @@ useFocusEffect(
             </View>
           ) : (
             <TouchableOpacity
-              style={styles.addProductsPrompt}
-              onPress={() => setVista("productos")}
+              style={[
+                styles.addProductsPrompt,
+                pedidoBloqueado &&
+                  styles.addProductsPromptDisabled,
+              ]}
+              onPress={
+                pedidoBloqueado
+                  ? mostrarPedidoBloqueado
+                  : () => setVista("productos")
+              }
             >
               <Icon
                 name="plus-circle"
@@ -1771,15 +2169,23 @@ useFocusEffect(
               styles.enviarBtn,
               !turnoActivo &&
                 styles.enviarBtnClosed,
-              (enviando || cargandoTurno) &&
+              pedidoBloqueado &&
+                styles.enviarBtnBlocked,
+              (enviando ||
+                cargandoTurno ||
+                pedidoBloqueado) &&
                 styles.buttonDisabled,
             ]}
             onPress={
-              turnoActivo
+              pedidoBloqueado
+                ? mostrarPedidoBloqueado
+                : turnoActivo
                 ? enviarPedido
                 : mostrarTurnoCerrado
             }
-            disabled={enviando || cargandoTurno}
+            disabled={
+              enviando || cargandoTurno
+            }
           >
             {enviando || cargandoTurno ? (
               <ActivityIndicator
@@ -1789,7 +2195,9 @@ useFocusEffect(
               <>
                 <Icon
                   name={
-                    turnoActivo
+                    pedidoBloqueado
+                      ? "lock"
+                      : turnoActivo
                       ? "send"
                       : "lock"
                   }
@@ -1797,7 +2205,9 @@ useFocusEffect(
                   color={palette.white}
                 />
                 <Text style={styles.enviarBtnText}>
-                  {!turnoActivo
+                  {pedidoBloqueado
+                    ? "Pedido bloqueado"
+                    : !turnoActivo
                     ? "Turno cerrado"
                     : ordenPendiente
                     ? "Agregar al pedido"
@@ -1981,6 +2391,51 @@ const styles = StyleSheet.create({
     color: palette.white,
     fontSize: 9.5,
     fontWeight: "900",
+  },
+
+  orderLockBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    backgroundColor: palette.dangerBackground,
+    borderWidth: 1,
+    borderColor: "#FFC7CA",
+    borderRadius: 18,
+    padding: 13,
+    marginBottom: 11,
+  },
+
+  orderLockIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    backgroundColor: palette.white,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+
+  orderLockTextBox: {
+    flex: 1,
+  },
+
+  orderLockTitle: {
+    color: "#A52A30",
+    fontSize: 13.5,
+    fontWeight: "900",
+  },
+
+  orderLockMessage: {
+    color: "#7A3035",
+    fontSize: 10.5,
+    lineHeight: 15,
+    marginTop: 3,
+  },
+
+  orderLockOwner: {
+    color: palette.danger,
+    fontSize: 10,
+    fontWeight: "900",
+    marginTop: 5,
   },
 
   tabs: {
@@ -2222,6 +2677,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     borderRadius: 12,
     backgroundColor: palette.primary,
+  },
+
+  addBtnDisabled: {
+    backgroundColor: palette.gray,
+    opacity: 0.65,
+  },
+
+  controlDisabled: {
+    opacity: 0.45,
   },
 
   addBtnText: {
@@ -2510,6 +2974,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
 
+  inputDisabled: {
+    backgroundColor: palette.muted,
+    color: palette.gray,
+  },
+
   addProductsPrompt: {
     minHeight: 67,
     flexDirection: "row",
@@ -2520,6 +2989,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: palette.border,
+  },
+
+  addProductsPromptDisabled: {
+    opacity: 0.55,
   },
 
   addProductsPromptText: {
@@ -2643,6 +3116,10 @@ const styles = StyleSheet.create({
 
   enviarBtnClosed: {
     backgroundColor: palette.warning,
+  },
+
+  enviarBtnBlocked: {
+    backgroundColor: palette.danger,
   },
 
   enviarBtnText: {
