@@ -186,10 +186,18 @@ export function TurnoDetailModal({ shift, isOpen, onClose }: TurnoDetailModalPro
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
             {/* Fugas */}
             <div className="space-y-3 bg-white p-5 rounded-[2rem] border border-gray-200 shadow-sm">
-              <h4 className="text-sm font-black text-restaurante-oscuro flex items-center gap-2">
-                <div className="p-1.5 bg-red-100 rounded-lg"><AlertTriangle size={14} className="text-red-600" /></div>
-                Fugas / Mesas Observadas
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-black text-restaurante-oscuro flex items-center gap-2">
+                  <div className="p-1.5 bg-red-100 rounded-lg"><AlertTriangle size={14} className="text-red-600" /></div>
+                  Fugas / Mesas Observadas
+                </h4>
+                {(shift.walkouts_count ?? 0) > 0 && (
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] font-bold text-red-400 uppercase">Pérdida</span>
+                    <span className="text-sm font-black text-red-600">Bs. {shift.walkouts_amount?.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
               {walkoutObservations.length === 0 ? (
                 <div className="bg-gray-50 p-4 rounded-2xl border border-dashed border-gray-200 flex flex-col items-center justify-center text-center gap-2">
                   <CheckCircle2 size={24} className="text-gray-300" />

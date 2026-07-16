@@ -35,11 +35,13 @@ class EmployeeShiftSerializer(serializers.ModelSerializer):
     tables_served = serializers.SerializerMethodField(read_only=True)
 
     walkout_observations = serializers.SerializerMethodField(read_only=True)
+    walkouts_count = serializers.SerializerMethodField(read_only=True)
+    walkouts_amount = serializers.SerializerMethodField(read_only=True)
     sold_dishes = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = EmployeeShift
-        fields = ['id', 'user', 'username', 'full_name', 'start_time', 'end_time', 'is_active', 'observations', 'generated_income', 'tickets_generated', 'tables_served', 'walkout_observations', 'sold_dishes']
+        fields = ['id', 'user', 'username', 'full_name', 'start_time', 'end_time', 'is_active', 'observations', 'generated_income', 'tickets_generated', 'tables_served', 'walkout_observations', 'walkouts_count', 'walkouts_amount', 'sold_dishes']
         read_only_fields = ['id', 'user', 'start_time']
 
     def get_full_name(self, obj):
@@ -114,6 +116,31 @@ class EmployeeShiftSerializer(serializers.ModelSerializer):
             pass # Si hay algun error importando o consultando la caja, se ignora
             
         return list(set(observations)) # Evitar duplicados si hay cruces
+
+    def get_walkouts_count(self, obj):
+        from apps.orders.infrastructure.models import Order
+        orders = Order.objects.filter(
+            waiter=obj.user,
+            status__in=['Cancelada', 'Observada'],
+            created_at__gte=obj.start_time
+        ).exclude(observation_note__isnull=True).exclude(observation_note='')
+        if obj.end_time:
+            orders = orders.filter(created_at__lte=obj.end_time)
+        return orders.count()
+
+    def get_walkouts_amount(self, obj):
+        from apps.orders.infrastructure.models import Order
+        orders = Order.objects.filter(
+            waiter=obj.user,
+            status__in=['Cancelada', 'Observada'],
+            created_at__gte=obj.start_time
+        ).exclude(observation_note__isnull=True).exclude(observation_note='')
+        if obj.end_time:
+            orders = orders.filter(created_at__lte=obj.end_time)
+            
+        from django.db.models import Sum
+        total = orders.aggregate(total=Sum('total'))['total']
+        return float(total) if total else 0.0
 
     def get_sold_dishes(self, obj):
         from apps.orders.infrastructure.models import Order, OrderItem

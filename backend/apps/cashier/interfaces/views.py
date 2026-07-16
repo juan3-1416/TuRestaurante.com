@@ -19,7 +19,7 @@ class CashierViewSet(viewsets.ViewSet):
         user = request.user
         
         # Check if already open
-        if CashShift.objects.filter(is_open=True).exists():
+        if CashShift.objects.filter(is_open=True, user=user).exists():
             return Response({'error': 'Ya existe un turno de caja abierto.'}, status=status.HTTP_400_BAD_REQUEST)
         
         initial_balance = request.data.get('initial_balance', 0)
@@ -34,7 +34,7 @@ class CashierViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'])
     def close_shift(self, request):
-        shift = CashShift.objects.filter(is_open=True).first()
+        shift = CashShift.objects.filter(is_open=True, user=request.user).first()
         if not shift:
             return Response({'error': 'No hay un turno de caja abierto.'}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -56,7 +56,7 @@ class CashierViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'])
     def current(self, request):
-        shift = CashShift.objects.filter(is_open=True).first()
+        shift = CashShift.objects.filter(is_open=True, user=request.user).first()
         if not shift:
             return Response({'message': 'No open shift'}, status=status.HTTP_404_NOT_FOUND)
             
@@ -65,12 +65,16 @@ class CashierViewSet(viewsets.ViewSet):
 
 class TransactionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
-    queryset = Transaction.objects.all().order_by('-created_at')
     serializer_class = TransactionSerializer
+
+    def get_queryset(self):
+        if self.request.user.role == 'Administrador':
+            return Transaction.objects.all().order_by('-created_at')
+        return Transaction.objects.filter(shift__user=self.request.user).order_by('-created_at')
 
     @action(detail=False, methods=['post'])
     def expense(self, request):
-        shift = CashShift.objects.filter(is_open=True).first()
+        shift = CashShift.objects.filter(is_open=True, user=request.user).first()
         if not shift:
             return Response({'error': 'No hay un turno de caja abierto para registrar gastos.'}, status=status.HTTP_400_BAD_REQUEST)
             
@@ -93,7 +97,7 @@ class TransactionViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def income(self, request):
-        shift = CashShift.objects.filter(is_open=True).first()
+        shift = CashShift.objects.filter(is_open=True, user=request.user).first()
         if not shift:
             return Response({'error': 'No hay un turno de caja abierto para registrar ingresos.'}, status=status.HTTP_400_BAD_REQUEST)
             

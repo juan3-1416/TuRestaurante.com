@@ -23,6 +23,7 @@ export function CajaTransactionHistory({ isShiftOpen, transactions }: CajaTransa
           <thead>
             <tr className="border-b border-gray-200/50">
               <th className="px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Hora</th>
+              <th className="px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Cajero</th>
               <th className="px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Descripción</th>
               <th className="px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Método</th>
               <th className="px-4 py-3 text-xs font-bold text-gray-400 uppercase tracking-widest">Moneda</th>
@@ -32,13 +33,13 @@ export function CajaTransactionHistory({ isShiftOpen, transactions }: CajaTransa
           <tbody>
             {!isShiftOpen ? (
               <tr>
-                <td colSpan={5} className="py-16 text-center text-gray-400 font-medium italic">
+                <td colSpan={6} className="py-16 text-center text-gray-400 font-medium italic">
                   La caja está cerrada. Abre el turno para visualizar los movimientos.
                 </td>
               </tr>
             ) : transactions.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-16 text-center text-gray-400 font-medium italic">
+                <td colSpan={6} className="py-16 text-center text-gray-400 font-medium italic">
                   No hay movimientos registrados en este turno.
                 </td>
               </tr>
@@ -47,6 +48,9 @@ export function CajaTransactionHistory({ isShiftOpen, transactions }: CajaTransa
                 <tr key={tx.id} className="border-b border-white/40 hover:bg-white/50 transition-colors group">
                   <td className="px-4 py-4 text-sm font-semibold text-gray-500">
                     {new Date(tx.created_at).toLocaleTimeString('es-BO', { hour: '2-digit', minute: '2-digit' })}
+                  </td>
+                  <td className="px-4 py-4 text-sm font-semibold text-gray-700">
+                    {(tx as any).cashier_name || "-"}
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex flex-col">

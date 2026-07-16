@@ -14,6 +14,7 @@ export interface ReceiptData {
   exchangeRate?: number;
   amountReceived?: number;
   changeBs?: number;
+  orderIds?: (string | number)[];
 }
 
 interface ReceiptModalProps {
@@ -78,6 +79,9 @@ export function ReceiptModal({ isOpen, onClose, data }: ReceiptModalProps) {
             <div className="flex justify-between"><span>Mesa:</span> <span>{data.tableNumber}</span></div>
             <div className="flex justify-between"><span>Cajero:</span> <span>{data.cashierName}</span></div>
             <div className="flex justify-between"><span>Método:</span> <span>{data.method}</span></div>
+            {data.orderIds && data.orderIds.length > 0 && (
+              <div className="flex justify-between"><span>Orden(es):</span> <span>#{data.orderIds.join(", #")}</span></div>
+            )}
           </div>
 
           {/* Lista de Productos */}

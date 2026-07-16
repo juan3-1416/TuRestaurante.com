@@ -15,7 +15,7 @@ export function useCaja() {
   const exchangeRate = useExchangeRate()
 
   const { tables, refetch: refetchTables, resolveWalkout } = useTables()
-  const { shift, isShiftOpen, refetch: refetchShift, registerIncome } = useShift()
+  const { shift, isShiftOpen, refetch: refetchShift, registerIncome, registerExpense } = useShift()
 
   const shiftInitialBalance = shift ? Number(shift.initial_balance) : 0
   const transactions = shift?.transactions || []
@@ -70,15 +70,15 @@ export function useCaja() {
     try {
       await resolveWalkout.mutateAsync(selectedTableForPayment.id)
       
-      // Registrar la fuga como un ingreso esperado que no se recibió (así suma al Total Esperado)
+      // Registrar la fuga como un egreso esperado (pérdida que se descuenta al mesero)
       try {
         const obsText = selectedTableForPayment.observationNote ? ` (${selectedTableForPayment.observationNote})` : ""
-        await registerIncome.mutateAsync({
+        await registerExpense.mutateAsync({
           amount: tableTotalBs,
-          description: `Fuga - Mesa ${selectedTableForPayment.number}${obsText}`
+          description: `Fuga / Pérdida - Mesa ${selectedTableForPayment.number}${obsText}`
         })
       } catch (incomeError) {
-        console.warn("Backend no soporta registro manual de ingresos para la fuga.", incomeError)
+        console.warn("Backend no soporta registro manual de egresos para la fuga.", incomeError)
       }
 
       await Promise.all([refetchTables(), refetchShift()])
@@ -113,6 +113,13 @@ export function useCaja() {
       return acc;
     }, [] as ReceiptData["items"]);
 
+    const orderIds: (number | string)[] = 
+      selectedTableForPayment.activeOrderIds && selectedTableForPayment.activeOrderIds.length > 0
+        ? selectedTableForPayment.activeOrderIds
+        : selectedTableForPayment.activeOrderId
+          ? [selectedTableForPayment.activeOrderId]
+          : [];
+
     const newReceipt: ReceiptData = {
       tableNumber: selectedTableForPayment.number,
       cashierName: cashierName,
@@ -123,7 +130,8 @@ export function useCaja() {
       currency: paymentCurrency,
       exchangeRate: exchangeRate,
       amountReceived: Number(amountReceived) || 0,
-      changeBs: changeBs
+      changeBs: changeBs,
+      orderIds: orderIds
     };
 
     await new Promise(resolve => setTimeout(resolve, 1000))
@@ -131,13 +139,7 @@ export function useCaja() {
     try {
       // Opción A: Pagar TODAS las órdenes activas de la mesa en una sola confirmación.
       // Usamos activeOrderIds si está disponible, con fallback a activeOrderId (1 sola orden).
-      const orderIds: (number | string)[] = 
-        selectedTableForPayment.activeOrderIds && selectedTableForPayment.activeOrderIds.length > 0
-          ? selectedTableForPayment.activeOrderIds
-          : selectedTableForPayment.activeOrderId
-            ? [selectedTableForPayment.activeOrderId]
-            : [];
-
+      
       if (orderIds.length === 0) {
         alert("No se encontró una orden activa para esta mesa. Verifica que se hayan enviado productos a cocina.");
         setIsProcessingPayment(false);
