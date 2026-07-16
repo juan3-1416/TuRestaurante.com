@@ -91,7 +91,7 @@ export function TableDetailModal({ table, isOpen, onClose }: TableDetailProps) {
       setEditingTicketId(ticketId)
       
       const mapped = (table.orders || [])
-        .filter(o => (o.orderId || "Orden 1") === ticketId)
+        .filter(o => String(o.orderId || "Orden 1") === String(ticketId))
         .map((o): Product => ({
           // Items del backend: { id (product_id), name, price, cartId }
           // Items del frontend: { productId, id, name, price, cartId, orderId }
