@@ -17,8 +17,8 @@ export function ResumenEmpleadosTable({ data }: ResumenEmpleadosTableProps) {
   return (
     <div className="bg-white/80 backdrop-blur-xl border border-white p-6 rounded-[2rem] shadow-sm flex flex-col gap-4">
       <div>
-        <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Rendimiento del Equipo</h3>
-        <p className="text-xs text-gray-400 font-medium mt-0.5">Resumen por empleado en el período</p>
+        <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest">Rendimiento de Meseros</h3>
+        <p className="text-xs text-gray-400 font-medium mt-0.5">Ventas y mesas atendidas en el período</p>
       </div>
 
       <div className="overflow-x-auto rounded-2xl border border-gray-100">
@@ -34,9 +34,6 @@ export function ResumenEmpleadosTable({ data }: ResumenEmpleadosTableProps) {
               </th>
               <th className="text-right p-3 px-4">
                 <span className="flex items-center justify-end gap-1"><Hash size={11}/>Mesas</span>
-              </th>
-              <th className="text-right p-3 px-4">
-                <span className="flex items-center justify-end gap-1"><Clock size={11}/>Horas</span>
               </th>
             </tr>
           </thead>
@@ -63,7 +60,6 @@ export function ResumenEmpleadosTable({ data }: ResumenEmpleadosTableProps) {
                   </td>
                   <td className="p-3 px-4 text-right font-bold text-gray-700">{emp.tickets}</td>
                   <td className="p-3 px-4 text-right font-bold text-gray-700">{emp.tables}</td>
-                  <td className="p-3 px-4 text-right font-bold text-gray-500">{emp.hours}h</td>
                 </tr>
               )
             })}
